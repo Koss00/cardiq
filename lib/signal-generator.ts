@@ -1,0 +1,118 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { Card, CardSignal, PlayerStats } from '@/types';
+import { hashCard, getCachedSignal, setCachedSignal } from './cache';
+import { fetchPlayerStats } from './player-stats';
+
+const client = new Anthropic();
+
+export function buildCardDetail(card: Card): string {
+  const roi =
+    card.purchasePrice === 0
+      ? 'N/A'
+      : (() => {
+          const r = ((card.currentValue - card.purchasePrice) / card.purchasePrice) * 100;
+          return `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`;
+        })();
+  const daysHeld = Math.floor((Date.now() - new Date(card.addedAt).getTime()) / 86400000);
+  const grading: Record<string, string> = {
+    'PSA 10': 'Gem Mint — top 1-5% of submissions; 3-5× PSA 9 premium',
+    'PSA 9': 'Mint — solid, liquid market; eclipsed by PSA 10 in value',
+    'PSA 8': 'Near Mint-Mint — moderate discount to PSA 9; slower to flip',
+    'PSA 7': 'Near Mint — significantly discounted; limited collector demand',
+    'BGS 9.5': 'Gem Mint equivalent — Beckett gold label; preferred by high-end buyers',
+    'BGS 9': 'Mint — Beckett standard, respectable grade',
+    'SGC 10': 'Pristine — SGC gem mint, growing vintage acceptance',
+    Raw: 'Ungraded — grading risk and upside; value depends on submission outcome',
+  };
+  return [
+    `${card.year} ${card.brand} ${card.player}`,
+    `  Variation: ${card.variation ?? 'Base'} | Sport: ${card.sport}`,
+    `  Condition: ${card.condition} — ${grading[card.condition] ?? card.condition}`,
+    `  Purchase: $${card.purchasePrice} | Current: $${card.currentValue} | ROI: ${roi}`,
+    `  Days held: ${daysHeld}`,
+  ].join('\n');
+}
+
+function buildStatsSection(stats: PlayerStats): string {
+  const statLine = stats.stats.map((s) => `${s.label}: ${s.value}`).join(' | ');
+  const lines = [
+    `━━━ LIVE PLAYER STATS (${stats.season}) ━━━`,
+    `Player: ${stats.playerName}${stats.team ? ` | Team: ${stats.team}` : ''}`,
+    statLine,
+  ];
+  if (stats.injuryStatus) lines.push(`Injury Status: ${stats.injuryStatus}`);
+  lines.push('Use these real stats to strengthen the playerContext dimension of your analysis.');
+  return lines.join('\n');
+}
+
+const FULL_PROMPT = (detail: string, statsSection: string, today: string) =>
+  `You are a senior sports card investment analyst. Today: ${today}
+
+━━━ CARD ━━━
+${detail}
+
+${statsSection}
+
+Analyze across three dimensions: price trend, player performance, scarcity/grade.
+The playerContext dimension MUST incorporate the live stats above if provided.
+
+Return ONLY this JSON object (no markdown, no preamble):
+{"player":"Full Name","signal":"BUY|SELL|HOLD","confidence":82,"summary":"one punchy sentence","priceTrend":"2-3 sentences","playerContext":"2-3 sentences referencing actual stats","scarcityNote":"2-3 sentences","priceTarget":350.00,"timeframe":"3-6 months"}`;
+
+/**
+ * Non-streaming full signal generation used by the background prefetch.
+ * Checks cache first; writes to cache on generation.
+ */
+export async function generateSignalForCard(card: Card, force = false): Promise<CardSignal | null> {
+  const hash = hashCard(card);
+
+  if (!force) {
+    const cached = getCachedSignal(hash);
+    if (cached) return cached as CardSignal;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const detail = buildCardDetail(card);
+
+  // Fetch live player stats (non-blocking — signal still generates if stats fail)
+  let playerStats: PlayerStats | null = null;
+  try {
+    playerStats = await fetchPlayerStats(card.player, card.sport);
+    if (playerStats) {
+      console.log(`[signal] got ${playerStats.stats.length} stats for ${card.player}`);
+    }
+  } catch (err) {
+    console.warn(`[signal] stats fetch skipped for ${card.player}:`, err);
+  }
+
+  const statsSection = playerStats
+    ? buildStatsSection(playerStats)
+    : '━━━ PLAYER STATS ━━━\nNo live stats available — base analysis on card fundamentals only.';
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: FULL_PROMPT(detail, statsSection, today) }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
+  const raw = JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+
+  const signal: CardSignal = {
+    cardId: card.id,
+    player: raw.player ?? card.player,
+    signal: raw.signal,
+    confidence: raw.confidence,
+    summary: raw.summary,
+    priceTrend: raw.priceTrend,
+    playerContext: raw.playerContext,
+    scarcityNote: raw.scarcityNote,
+    priceTarget: raw.priceTarget,
+    timeframe: raw.timeframe,
+    generatedAt: new Date().toISOString(),
+    playerStats: playerStats ?? undefined,
+  };
+
+  setCachedSignal(hash, signal);
+  return signal;
+}

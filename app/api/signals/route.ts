@@ -1,0 +1,199 @@
+import { NextRequest } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
+import { Card, PlayerStats } from '@/types';
+import { hashCard, getCachedSignal, setCachedSignal } from '@/lib/cache';
+import { buildCardDetail } from '@/lib/signal-generator';
+import { fetchPlayerStats } from '@/lib/player-stats';
+
+const client = new Anthropic();
+
+function sse(data: object): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  Connection: 'keep-alive',
+};
+
+// Markers Claude uses to separate analysis sections in Phase 2
+const SECTION_MARKERS = [
+  { tag: '===PRICE===', field: 'priceTrend' },
+  { tag: '===PLAYER===', field: 'playerContext' },
+  { tag: '===SCARCITY===', field: 'scarcityNote' },
+] as const;
+
+const MAX_TAG_LEN = Math.max(...SECTION_MARKERS.map((m) => m.tag.length));
+
+export async function POST(req: NextRequest) {
+  const { card, force }: { card: Card; force?: boolean } = await req.json();
+  if (!card) return new Response('No card', { status: 400 });
+
+  const cardHash = hashCard(card);
+  const cached = force ? null : getCachedSignal(cardHash);
+
+  // ── Cache hit: return full signal instantly as a single SSE done event ──────
+  if (cached) {
+    return new Response(
+      new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(sse({ type: 'done', signal: cached, fromCache: true }));
+          ctrl.close();
+        },
+      }),
+      { headers: SSE_HEADERS }
+    );
+  }
+
+  // ── Cache miss: two-phase streaming ────────────────────────────────────────
+  const today = new Date().toISOString().split('T')[0];
+  const detail = buildCardDetail(card);
+
+  // Fetch live player stats before streaming — non-blocking, failure is safe
+  let playerStats: PlayerStats | null = null;
+  try {
+    playerStats = await fetchPlayerStats(card.player, card.sport);
+    if (playerStats) console.log(`[signals] got ${playerStats.stats.length} stats for ${card.player}`);
+  } catch {
+    console.warn(`[signals] stats fetch skipped for ${card.player}`);
+  }
+
+  const statsContext = playerStats
+    ? `Live ${playerStats.season} stats: ${playerStats.stats.map((s) => `${s.label} ${s.value}`).join(', ')}${playerStats.team ? ` | Team: ${playerStats.team}` : ''}${playerStats.injuryStatus ? ` | Status: ${playerStats.injuryStatus}` : ''}`
+    : 'No live stats available.';
+
+  const stream = new ReadableStream({
+    async start(ctrl) {
+      try {
+        // ── Phase 1: Quick non-streaming verdict (~200 tokens, ~1s) ──────────
+        const verdictRes = await client.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 200,
+          messages: [
+            {
+              role: 'user',
+              content: `Sports card investment analyst. Today: ${today}
+
+${detail}
+${statsContext}
+
+Return ONLY this JSON (no other text):
+{"signal":"BUY|SELL|HOLD","confidence":82,"summary":"one punchy actionable sentence","priceTarget":350.00,"timeframe":"3-6 months"}`,
+            },
+          ],
+        });
+
+        const verdictText =
+          verdictRes.content[0].type === 'text' ? verdictRes.content[0].text : '{}';
+        const verdict = JSON.parse(verdictText.replace(/```json\n?|\n?```/g, '').trim());
+
+        ctrl.enqueue(sse({ type: 'verdict', ...verdict }));
+
+        // ── Phase 2: Streaming analysis with section markers ─────────────────
+        const collected: Record<string, string> = {
+          priceTrend: '',
+          playerContext: '',
+          scarcityNote: '',
+        };
+        let buf = ''; // lookahead buffer to avoid splitting section markers
+        let activeField: string | null = null;
+
+        const analysisStream = await client.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 700,
+          stream: true,
+          messages: [
+            {
+              role: 'user',
+              content: `Sports card: ${detail}
+${statsContext}
+Verdict: ${verdict.signal} (${verdict.confidence}% confidence) — "${verdict.summary}"
+
+Provide detailed analysis. Output EXACTLY these three sections using these exact markers on their own line:
+===PRICE===
+[2-3 sentences on price trajectory and ROI sustainability]
+===PLAYER===
+[2-3 sentences on player performance citing the live stats above if available]
+===SCARCITY===
+[2-3 sentences on grade, population, liquidity]`,
+            },
+          ],
+        });
+
+        for await (const event of analysisStream) {
+          if (event.type !== 'content_block_delta' || event.delta.type !== 'text_delta') continue;
+          const text = event.delta.text;
+          buf += text;
+
+          // Detect and handle section marker transitions
+          let foundMarker = true;
+          while (foundMarker) {
+            foundMarker = false;
+            for (const { tag, field } of SECTION_MARKERS) {
+              const idx = buf.indexOf(tag);
+              if (idx === -1) continue;
+
+              // Flush text before this marker into current field
+              const before = buf.slice(0, idx).replace(/^\n+/, '');
+              if (activeField && before) {
+                collected[activeField] += before;
+                ctrl.enqueue(sse({ type: 'chunk', field: activeField, text: before }));
+              }
+
+              activeField = field;
+              buf = buf.slice(idx + tag.length).replace(/^\n/, '');
+              foundMarker = true;
+              break;
+            }
+          }
+
+          // Emit text for current field, keeping a small lookahead to avoid
+          // splitting an upcoming marker across two chunks
+          if (activeField && buf.length > MAX_TAG_LEN) {
+            const emit = buf.slice(0, -MAX_TAG_LEN);
+            if (emit) {
+              collected[activeField] += emit;
+              ctrl.enqueue(sse({ type: 'chunk', field: activeField, text: emit }));
+              buf = buf.slice(-MAX_TAG_LEN);
+            }
+          }
+        }
+
+        // Flush remaining buffer
+        if (activeField && buf.trim()) {
+          const flush = buf.replace(/\n+$/, '');
+          collected[activeField] += flush;
+          ctrl.enqueue(sse({ type: 'chunk', field: activeField, text: flush }));
+        }
+
+        // Build, cache and send full signal
+        const signal = {
+          cardId: card.id,
+          player: card.player,
+          signal: verdict.signal,
+          confidence: verdict.confidence,
+          summary: verdict.summary,
+          priceTrend: collected.priceTrend.trim(),
+          playerContext: collected.playerContext.trim(),
+          scarcityNote: collected.scarcityNote.trim(),
+          priceTarget: verdict.priceTarget,
+          timeframe: verdict.timeframe,
+          generatedAt: new Date().toISOString(),
+          playerStats: playerStats ?? undefined,
+        };
+
+        setCachedSignal(cardHash, signal);
+        ctrl.enqueue(sse({ type: 'done', signal }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('signals stream error:', message);
+        ctrl.enqueue(sse({ type: 'error', message }));
+      } finally {
+        ctrl.close();
+      }
+    },
+  });
+
+  return new Response(stream, { headers: SSE_HEADERS });
+}
