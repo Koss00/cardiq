@@ -118,7 +118,8 @@ body {
               border-color 0.25s ease;
   cursor: pointer;
 }
-.trading-card:hover {
+/* Only lift standalone cards — faces are controlled by the flip wrapper */
+.trading-card:not(.card-face):hover {
   transform: translateY(-6px) rotate(0.4deg);
   border-color: rgba(0, 212, 255, 0.55);
   box-shadow:
@@ -129,6 +130,72 @@ body {
     0 0 40px rgba(0, 212, 255, 0.12),
     0 0 20px rgba(245, 200, 66, 0.06),
     inset 0 1px 0 rgba(192, 200, 216, 0.15);
+}
+
+/* ── Card flip 3D ────────────────────────────────────────────────────────── */
+/*
+ * Two-element architecture keeps the perspective container transform-free:
+ *
+ *  .card-flip-wrapper  — cursor, hover scale, flip drop-shadow
+ *                        (never holds perspective or preserve-3d)
+ *  .card-flip-scene    — perspective only; NO transform ever applied
+ *                        (a transform here would flatten preserve-3d)
+ *  .card-flip-inner    — transform-style: preserve-3d, rotateY for flip
+ */
+.card-flip-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+/* Only scale when not mid-flip to avoid jarring double-transform */
+.card-flip-wrapper:not(.is-flipping):hover {
+  transform: scale(1.02);
+}
+/* Drop-shadow during flip on wrapper — never on the perspective container */
+.card-flip-wrapper.is-flipping {
+  filter: drop-shadow(0 24px 40px rgba(0, 212, 255, 0.15))
+          drop-shadow(0 8px 16px rgba(6, 14, 28, 0.5));
+}
+
+.card-flip-scene {
+  perspective: 2000px;
+  width: 100%;
+  height: 100%;
+  /* NO transform or filter ever added here */
+}
+
+.card-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+.card-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.card-face-back {
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Override .trading-card defaults for faces — no lift, no transform transition */
+.card-face.trading-card {
+  position: absolute;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Shimmer burst fires on the wrapper so it never touches the perspective container */
+.card-flip-wrapper.is-flipping .card-holo-layer {
+  opacity: 1 !important;
+  animation-play-state: running !important;
 }
 
 /* Prismatic light layer — activates on hover */
@@ -151,7 +218,8 @@ body {
   border-radius: inherit;
   animation: prizm-shift 5s ease infinite paused;
 }
-.trading-card:hover .card-holo-layer {
+/* Only activate holo on standalone cards, not faces */
+.trading-card:not(.card-face):hover .card-holo-layer {
   opacity: 1;
   animation-play-state: running;
 }
@@ -308,6 +376,23 @@ body {
     0 0 0 1px rgba(0, 212, 255, 0.4),
     0 0 30px rgba(0, 212, 255, 0.15),
     0 0 60px rgba(123, 47, 255, 0.08);
+}
+
+/* ── Portfolio card grid (plain CSS — bypasses Tailwind JIT for reliability) ── */
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+@media (max-width: 1199px) {
+  .portfolio-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .portfolio-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @layer utilities {

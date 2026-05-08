@@ -8,6 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        wide: '1200px',
+      },
       colors: {
         navy: {
           950: '#060E1C',

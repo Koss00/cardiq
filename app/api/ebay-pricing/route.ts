@@ -15,18 +15,18 @@ export async function GET(req: NextRequest) {
   const cacheKey = `sold:${query}`;
   const cached = getCachedEbay(cacheKey);
   if (cached) {
-    console.log(`[ebay-sold] cache hit: "${query}"`);
+    console.log(`[ebay-market] cache hit: "${query}"`);
     return NextResponse.json({ listings: cached, fromCache: true });
   }
 
-  console.log(`[ebay-sold] fetching recent comps for: "${query}"`);
+  console.log(`[ebay-market] fetching recent market prices for: "${query}"`);
 
   let token: string;
   try {
     token = await getEbayAppToken();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[ebay-sold] auth failed:', msg);
+    console.error('[ebay-market] auth failed:', msg);
     return NextResponse.json({ error: msg, listings: [], fromCache: false }, { status: 200 });
   }
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     });
 
     const fullUrl = `${BROWSE_API}?${params.toString()}`;
-    console.log('[ebay-sold] request URL:', fullUrl);
+    console.log('[ebay-market] request URL:', fullUrl);
 
     const res = await fetch(fullUrl, {
       headers: {
@@ -50,9 +50,9 @@ export async function GET(req: NextRequest) {
       next: { revalidate: 0 },
     });
 
-    console.log('[ebay-sold] status:', res.status, res.statusText);
+    console.log('[ebay-market] status:', res.status, res.statusText);
     const rawBody = await res.text();
-    console.log('[ebay-sold] raw response:', rawBody.slice(0, 600));
+    console.log('[ebay-market] raw response:', rawBody.slice(0, 600));
 
     if (!res.ok) {
       return NextResponse.json(
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     const data = JSON.parse(rawBody) as Record<string, unknown>;
     const rawItems = (data.itemSummaries as Record<string, unknown>[] | undefined) ?? [];
-    console.log(`[ebay-sold] got ${rawItems.length} items`);
+    console.log(`[ebay-market] got ${rawItems.length} items`);
 
     const listings = rawItems
       .map((item) => {
@@ -78,14 +78,15 @@ export async function GET(req: NextRequest) {
           imageUrl,
         };
       })
-      .filter((l) => l.price > 0);
+      .filter((l) => l.price > 0)
+      .sort((a, b) => a.price - b.price);
 
     setCachedEbay(cacheKey, listings);
-    console.log(`[ebay-sold] cached ${listings.length} listings`);
+    console.log(`[ebay-market] cached ${listings.length} listings`);
     return NextResponse.json({ listings, fromCache: false });
 
   } catch (err) {
-    console.error('[ebay-sold] error:', err);
+    console.error('[ebay-market] error:', err);
     return NextResponse.json(
       { error: 'eBay request failed — check server logs', listings: [], fromCache: false },
       { status: 200 }

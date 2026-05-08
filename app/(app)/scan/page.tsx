@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, PlusCircle, RotateCcw } from 'lucide-react';
+import { Loader2, PlusCircle, RotateCcw, Camera, CheckCircle, X } from 'lucide-react';
 import PhotoUpload from '@/components/scan/PhotoUpload';
 import CardResult from '@/components/scan/CardResult';
 import { useStore } from '@/lib/store';
@@ -39,6 +39,9 @@ export default function ScanPage() {
   const [currentValue, setCurrentValue] = useState('');
   const [adding, setAdding] = useState(false);
 
+  const [cardPhoto, setCardPhoto] = useState<string | null>(null);
+  const cardPhotoInputRef = useRef<HTMLInputElement>(null);
+
   async function handleImage(base64: string, mediaType: string) {
     setIdentifying(true);
     setIdError(null);
@@ -51,6 +54,7 @@ export default function ScanPage() {
     setFromCache(false);
     setSoldFromCache(false);
     setActiveFromCache(false);
+    setCardPhoto(null);
 
     try {
       const res = await fetch('/api/identify-card', {
@@ -77,13 +81,11 @@ export default function ScanPage() {
     setSoldLoading(true);
     setActiveLoading(true);
 
-    // Fetch sold and active listings in parallel
     const [soldRes, activeRes] = await Promise.allSettled([
       fetch(`/api/ebay-pricing?q=${encoded}`),
       fetch(`/api/ebay-active?q=${encoded}`),
     ]);
 
-    // Sold listings
     try {
       if (soldRes.status === 'fulfilled') {
         const data = await soldRes.value.json();
@@ -103,7 +105,6 @@ export default function ScanPage() {
       setSoldLoading(false);
     }
 
-    // Active listings
     try {
       if (activeRes.status === 'fulfilled') {
         const data = await activeRes.value.json();
@@ -121,8 +122,9 @@ export default function ScanPage() {
   function handleAddToPortfolio() {
     if (!identified) return;
     setAdding(true);
+    const cardId = generateId();
     const card: Card = {
-      id: generateId(),
+      id: cardId,
       player: identified.player,
       year: identified.year,
       brand: identified.brand,
@@ -136,6 +138,9 @@ export default function ScanPage() {
       lastPriceUpdate: new Date().toISOString(),
     };
     dispatch({ type: 'ADD_CARD', card });
+    if (cardPhoto) {
+      localStorage.setItem(`cardiq:photo:${cardId}`, cardPhoto);
+    }
     router.push('/portfolio');
   }
 
@@ -153,6 +158,7 @@ export default function ScanPage() {
     setCondition('Raw');
     setPurchasePrice('');
     setCurrentValue('');
+    setCardPhoto(null);
   }
 
   return (
@@ -191,6 +197,72 @@ export default function ScanPage() {
             activeError={activeError}
             avgPrice={avgPrice}
           />
+
+          {/* Card photo step */}
+          <div className="chrome-panel p-5">
+            {/* Hidden file input */}
+            <input
+              ref={cardPhotoInputRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setCardPhoto(ev.target?.result as string ?? null);
+                reader.readAsDataURL(file);
+                e.target.value = '';
+              }}
+            />
+
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-display font-black text-white uppercase tracking-widest text-sm">Card Photo</h3>
+                <p className="text-chrome-500 text-xs font-display mt-0.5">Optional — shown on your portfolio card front</p>
+              </div>
+              {cardPhoto && (
+                <span className="flex items-center gap-1 text-emerald-400 text-[10px] font-display font-black uppercase tracking-widest">
+                  <CheckCircle size={10} /> Added
+                </span>
+              )}
+            </div>
+
+            {cardPhoto ? (
+              <div className="flex items-center gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cardPhoto} alt="Card" className="h-28 w-auto object-contain rounded-sm border border-[rgba(0,212,255,0.2)]" />
+                <div className="flex flex-col gap-2.5">
+                  <button
+                    onClick={() => cardPhotoInputRef.current?.click()}
+                    className="flex items-center gap-2 text-chrome-400 hover:text-white text-xs font-display font-black uppercase tracking-widest transition-colors"
+                  >
+                    <Camera size={11} /> Retake Photo
+                  </button>
+                  <button
+                    onClick={() => setCardPhoto(null)}
+                    className="flex items-center gap-2 text-chrome-600 hover:text-red-400 text-xs font-display font-black uppercase tracking-widest transition-colors"
+                  >
+                    <X size={11} /> Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => cardPhotoInputRef.current?.click()}
+                className="flex items-center gap-4 w-full group text-left"
+              >
+                <div className="w-16 h-16 border-2 border-dashed border-[rgba(0,212,255,0.15)] rounded-sm flex items-center justify-center bg-navy-800 group-hover:border-[rgba(0,212,255,0.35)] group-hover:bg-navy-700 transition-all flex-shrink-0">
+                  <Camera size={22} className="text-chrome-500 group-hover:text-chrome-300 transition-colors" />
+                </div>
+                <div>
+                  <p className="text-white font-display font-black text-sm uppercase tracking-widest">Add Card Photo</p>
+                  <p className="text-chrome-500 text-xs font-display mt-0.5">JPG or PNG · Optional</p>
+                </div>
+              </button>
+            )}
+          </div>
+
           <div className="chrome-panel p-5 space-y-4">
             <h3 className="font-display font-black text-white uppercase tracking-widest text-sm">Add to Portfolio</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

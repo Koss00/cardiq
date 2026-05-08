@@ -127,7 +127,7 @@ export default function CardResult({
                   : 'text-chrome-400 hover:text-white'
               }`}
             >
-              Recent Sales
+              Market Prices
             </button>
             <button
               onClick={() => setTab('active')}
@@ -157,7 +157,7 @@ export default function CardResult({
         {/* Tab description */}
         <p className="text-chrome-600 text-[10px] font-display uppercase tracking-widest mb-3">
           {tab === 'sold'
-            ? 'Recent comps — newly listed fixed price & auction'
+            ? 'Based on recent eBay market data'
             : 'Active fixed-price listings — what sellers are asking now'}
         </p>
 
@@ -196,8 +196,8 @@ export default function CardResult({
                   <span className="text-white font-display font-black text-sm">
                     {formatCurrency(listing.price)}
                   </span>
-                  <span className={`text-[10px] font-display font-black uppercase ${tab === 'sold' ? 'text-gold-400' : 'text-emerald-500'}`}>
-                    {tab === 'sold' ? 'Comp' : 'Live'}
+                  <span className={`text-[10px] font-display font-black uppercase ${tab === 'sold' ? 'text-electric' : 'text-emerald-500'}`}>
+                    {tab === 'sold' ? 'Market' : 'Live'}
                   </span>
                   <a
                     href={listing.url}
