@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { Card } from '@/types';
+import { Card, PricePoint } from '@/types';
 
 // All cache files live in <project-root>/.cache/
 const CACHE_DIR = path.join(process.cwd(), '.cache');
@@ -9,6 +9,7 @@ const SCANS_FILE = path.join(CACHE_DIR, 'card-scans.json');
 const EBAY_FILE = path.join(CACHE_DIR, 'ebay-pricing.json');
 const SIGNALS_FILE = path.join(CACHE_DIR, 'signals.json');
 const STATS_FILE = path.join(CACHE_DIR, 'player-stats.json');
+const PRICE_HISTORY_FILE = path.join(CACHE_DIR, 'price-history.json');
 
 const EBAY_TTL_MS = 24 * 60 * 60 * 1000;
 const SIGNAL_TTL_MS = 24 * 60 * 60 * 1000;
@@ -37,10 +38,15 @@ interface StatsEntry {
   cachedAt: string;
 }
 
+interface PriceHistoryEntry {
+  points: PricePoint[];
+}
+
 type ScanCache = Record<string, ScanEntry>;
 type EbayCache = Record<string, EbayEntry>;
 type SignalCache = Record<string, SignalEntry>;
 type StatsCache = Record<string, StatsEntry>;
+type PriceHistoryCache = Record<string, PriceHistoryEntry>;
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -129,6 +135,29 @@ export function setCachedStats(key: string, stats: unknown) {
   const cache = readJson<StatsCache>(STATS_FILE, {});
   cache[key] = { stats, cachedAt: new Date().toISOString() };
   writeJson(STATS_FILE, cache);
+}
+
+// ─── Price history ────────────────────────────────────────────────────────────
+// Keyed by "history:{ebayQuery}" — records the average eBay price each time
+// fresh data is fetched. Builds up a trend line over days/weeks.
+
+export function recordPriceHistory(key: string, avgPrice: number) {
+  const cache = readJson<PriceHistoryCache>(PRICE_HISTORY_FILE, {});
+  const entry = cache[key] ?? { points: [] };
+  // Deduplicate: skip if the most recent point was recorded in the last 4 hours
+  const lastPoint = entry.points[entry.points.length - 1];
+  const tooRecent = lastPoint
+    && Date.now() - new Date(lastPoint.timestamp).getTime() < 4 * 60 * 60 * 1000;
+  if (!tooRecent) {
+    entry.points = [...entry.points.slice(-49), { price: avgPrice, timestamp: new Date().toISOString() }];
+    cache[key] = entry;
+    writeJson(PRICE_HISTORY_FILE, cache);
+  }
+}
+
+export function getPriceHistory(key: string): PricePoint[] {
+  const cache = readJson<PriceHistoryCache>(PRICE_HISTORY_FILE, {});
+  return cache[key]?.points ?? [];
 }
 
 /** Returns stats for both cache files — handy for debugging. */

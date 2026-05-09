@@ -35,7 +35,7 @@ function norm(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[̀-ͯ]/g, '') // explicit range avoids source-encoding issues
     .trim();
 }
 
@@ -74,20 +74,39 @@ async function getMlbRoster(): Promise<MlbPerson[]> {
 }
 
 async function findMlbPerson(playerName: string): Promise<MlbPerson | null> {
-  // 1. Search active 2026 roster
+  // 1. Search active 2026 roster (handles accented names via norm())
   const roster = await getMlbRoster();
   const active = roster.find((p) => nameMatch(p.fullName, playerName));
   if (active) return active;
 
-  // 2. Fall back to MLB people search (covers retired players)
+  // 2. Try MLB people search with full name (covers retired/DL players)
   console.log(`[player-stats] MLB: "${playerName}" not in active roster, trying people search`);
-  const res = await fetch(
+  const fullRes = await fetch(
     `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(playerName)}&sportId=1`,
     { next: { revalidate: 0 } }
   );
-  if (!res.ok) return null;
-  const data = await res.json() as { people?: MlbPerson[] };
-  return data.people?.[0] ?? null;
+  if (fullRes.ok) {
+    const fullData = await fullRes.json() as { people?: MlbPerson[] };
+    const match = fullData.people?.find((p) => nameMatch(p.fullName, playerName));
+    if (match) return match;
+  }
+
+  // 3. Last-name-only fallback — catches accented variants (e.g. "Julio Rodríguez" vs "Rodriguez")
+  const parts = playerName.trim().split(' ');
+  const lastName  = parts[parts.length - 1];
+  const firstName = parts[0];
+  console.log(`[player-stats] MLB: trying last-name search "${lastName}"`);
+  const lastRes = await fetch(
+    `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(lastName)}&sportId=1`,
+    { next: { revalidate: 0 } }
+  );
+  if (!lastRes.ok) return null;
+  const lastData = await lastRes.json() as { people?: MlbPerson[] };
+  const byLast = lastData.people?.find((p) => {
+    const n = norm(p.fullName);
+    return n.includes(norm(firstName)) && n.includes(norm(lastName));
+  });
+  return byLast ?? lastData.people?.[0] ?? null;
 }
 
 async function fetchMlbStats(playerName: string): Promise<PlayerStats | null> {

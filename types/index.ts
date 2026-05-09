@@ -37,7 +37,6 @@ export interface CardSignal {
   player: string;
   signal: SignalType;
   confidence: number;
-  // Structured three-dimension analysis (new)
   summary: string;
   priceTrend: string;
   playerContext: string;
@@ -46,7 +45,10 @@ export interface CardSignal {
   priceTarget?: number;
   generatedAt: string;
   playerStats?: PlayerStats;
-  // Legacy field — present on signals generated before the upgrade
+  newsItems?: string[];
+  priceHistory?: PricePoint[];
+  confidenceFactors?: ConfidenceFactor[];
+  // Legacy field
   reason?: string;
 }
 
@@ -70,3 +72,16 @@ export interface EbayListing {
   condition?: string;
   imageUrl?: string;
 }
+
+export interface PricePoint {
+  price: number;
+  timestamp: string;
+}
+
+export interface ConfidenceFactor {
+  label: string;
+  value: number; // 0–100
+  description: string;
+}
+
+

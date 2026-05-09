@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedEbay, setCachedEbay } from '@/lib/cache';
+import { getCachedEbay, setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 
 const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
@@ -83,6 +83,13 @@ export async function GET(req: NextRequest) {
 
     setCachedEbay(cacheKey, listings);
     console.log(`[ebay-market] cached ${listings.length} listings`);
+
+    // Record average price for sparkline history
+    if (listings.length > 0) {
+      const avg = listings.reduce((sum, l) => sum + l.price, 0) / listings.length;
+      recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
+    }
+
     return NextResponse.json({ listings, fromCache: false });
 
   } catch (err) {
