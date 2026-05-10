@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   "brand": "Card manufacturer (Topps, Panini, Upper Deck, Bowman, Fleer, Donruss, Score, etc.)",
   "cardNumber": "Card number if visible, otherwise null",
   "variation": "Special variation such as Rookie Card, Refractor, Prizm, Chrome, Auto, Patch, Holo, Gold, etc. or null if base",
-  "sport": "Baseball|Basketball|Football|Hockey|Soccer",
+  "sport": "Baseball|Basketball|Football|Hockey|Soccer|Golf",
   "condition": "Estimated raw condition: Mint|Near Mint|Excellent|Good|Poor",
   "confidence": 90,
   "description": "One sentence description of the card highlighting what makes it notable"

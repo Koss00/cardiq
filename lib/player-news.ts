@@ -5,6 +5,7 @@ const SPORT_PATHS: Record<string, string> = {
   Basketball: 'basketball/nba',
   Football:   'football/nfl',
   Hockey:     'hockey/nhl',
+  Golf:       'golf/pga',
 };
 
 /**
@@ -27,7 +28,7 @@ export async function fetchPlayerNews(playerName: string, sport: string): Promis
     if (!res.ok) return [];
 
     const data = await res.json() as {
-      articles?: Array<{ headline: string; description?: string }>;
+      articles?: Array<{ headline: string; description?: string; published?: string }>;
     };
 
     // Match any article that contains at least one significant name word
@@ -38,11 +39,14 @@ export async function fetchPlayerNews(playerName: string, sport: string): Promis
         return nameParts.some((part) => text.includes(part));
       })
       .slice(0, 3)
-      .map((a) =>
-        a.description
-          ? `${a.headline} — ${a.description.slice(0, 120)}`
-          : a.headline
-      );
+      .map((a) => {
+        const date = a.published
+          ? ` (${new Date(a.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
+          : '';
+        return a.description
+          ? `${a.headline}${date} — ${a.description.slice(0, 100)}`
+          : `${a.headline}${date}`;
+      });
 
     // Cache even empty results (avoids hammering ESPN on every signal refresh)
     setCachedStats(cacheKey, relevant);

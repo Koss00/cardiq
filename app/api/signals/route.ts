@@ -126,8 +126,8 @@ export async function POST(req: NextRequest) {
 
   // Build AI context blocks
   const statsContext = playerStats
-    ? `Live ${playerStats.season} stats: ${playerStats.stats.map((s) => `${s.label} ${s.value}`).join(', ')}${playerStats.team ? ` | Team: ${playerStats.team}` : ''}${playerStats.injuryStatus ? ` | INJURY: ${playerStats.injuryStatus}` : ''}`
-    : 'No live stats available.';
+    ? `${playerStats.isRetired ? 'Career highlights' : `Live ${playerStats.season} stats`} (${playerStats.source ?? 'API'}): ${playerStats.stats.map((s) => `${s.label} ${s.value}`).join(', ')}${playerStats.team ? ` | Team: ${playerStats.team}` : ''}${playerStats.injuryStatus ? ` | INJURY: ${playerStats.injuryStatus}` : ''}${playerStats.isRetired ? ' | RETIRED PLAYER' : ''}`
+    : 'No live stats available — historical player, use market data only.';
 
   const newsContext = newsItems.length > 0
     ? `Recent headlines:\n${newsItems.map((h, i) => `${i + 1}. ${h}`).join('\n')}`

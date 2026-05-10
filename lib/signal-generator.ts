@@ -35,13 +35,19 @@ export function buildCardDetail(card: Card): string {
 
 function buildStatsSection(stats: PlayerStats): string {
   const statLine = stats.stats.map((s) => `${s.label}: ${s.value}`).join(' | ');
+  const headerLabel = stats.isRetired ? 'CAREER HIGHLIGHTS' : `LIVE ${stats.season} STATS`;
   const lines = [
-    `━━━ LIVE PLAYER STATS (${stats.season}) ━━━`,
-    `Player: ${stats.playerName}${stats.team ? ` | Team: ${stats.team}` : ''}`,
+    `━━━ ${headerLabel} ━━━`,
+    `Player: ${stats.playerName}${stats.team ? ` | Team: ${stats.team}` : ''}${stats.source ? ` | Source: ${stats.source}` : ''}`,
     statLine,
   ];
   if (stats.injuryStatus) lines.push(`Injury Status: ${stats.injuryStatus}`);
-  lines.push('Use these real stats to strengthen the playerContext dimension of your analysis.');
+  if (stats.isRetired) {
+    lines.push('NOTE: This player is RETIRED. Stats above are career totals, not current performance.');
+    lines.push('For playerContext: emphasize legacy, HOF candidacy, and collectibility over active performance.');
+  } else {
+    lines.push('Use these real stats to strengthen the playerContext dimension of your analysis.');
+  }
   return lines.join('\n');
 }
 

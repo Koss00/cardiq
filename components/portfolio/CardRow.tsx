@@ -12,6 +12,7 @@ const SPORT_BG: Record<string, string> = {
   Football:   'linear-gradient(155deg, #0A1E3D, #1E4080)',
   Hockey:     'linear-gradient(155deg, #001635, #004488)',
   Soccer:     'linear-gradient(155deg, #0A2E18, #1A6635)',
+  Golf:       'linear-gradient(155deg, #1A1A00, #4A4000)',
 };
 
 function MiniCard({ card }: { card: Card }) {

@@ -20,6 +20,7 @@ export async function fetchPlayerStats(playerName: string, sport: string): Promi
     if      (sport === 'Baseball')   stats = await fetchMlbStats(playerName);
     else if (sport === 'Basketball') stats = await fetchNbaStats(playerName);
     else if (sport === 'Football')   stats = await fetchNflStats(playerName);
+    else if (sport === 'Golf')       stats = await fetchGolfStats(playerName);
   } catch (err) {
     console.error(`[player-stats] ${sport} failed for "${playerName}":`, err);
   }
@@ -30,12 +31,11 @@ export async function fetchPlayerStats(playerName: string, sport: string): Promi
 
 // ─── Name helpers ─────────────────────────────────────────────────────────────
 
-/** Strip accents/diacritics and lowercase — so "Rodríguez" matches "Rodriguez". */
 function norm(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // explicit range avoids source-encoding issues
+    .replace(/[̀-ͯ]/g, '')
     .trim();
 }
 
@@ -43,7 +43,6 @@ function nameMatch(rosterName: string, query: string): boolean {
   const r = norm(rosterName);
   const q = norm(query);
   if (r === q) return true;
-  // first + last word match (handles middle names in roster name)
   const qParts = q.split(' ').filter(Boolean);
   if (qParts.length >= 2) {
     const first = qParts[0];
@@ -73,14 +72,14 @@ async function getMlbRoster(): Promise<MlbPerson[]> {
   return people;
 }
 
-async function findMlbPerson(playerName: string): Promise<MlbPerson | null> {
-  // 1. Search active 2026 roster (handles accented names via norm())
+async function findMlbPerson(playerName: string): Promise<{ person: MlbPerson; isActive: boolean } | null> {
+  // 1. Check active 2026 roster (accented names normalized via norm())
   const roster = await getMlbRoster();
   const active = roster.find((p) => nameMatch(p.fullName, playerName));
-  if (active) return active;
+  if (active) return { person: active, isActive: true };
 
-  // 2. Try MLB people search with full name (covers retired/DL players)
-  console.log(`[player-stats] MLB: "${playerName}" not in active roster, trying people search`);
+  // 2. People search — covers retired, DL, and minor-league call-ups
+  console.log(`[player-stats] MLB: "${playerName}" not in 2026 roster, trying people search`);
   const fullRes = await fetch(
     `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(playerName)}&sportId=1`,
     { next: { revalidate: 0 } }
@@ -88,10 +87,10 @@ async function findMlbPerson(playerName: string): Promise<MlbPerson | null> {
   if (fullRes.ok) {
     const fullData = await fullRes.json() as { people?: MlbPerson[] };
     const match = fullData.people?.find((p) => nameMatch(p.fullName, playerName));
-    if (match) return match;
+    if (match) return { person: match, isActive: false };
   }
 
-  // 3. Last-name-only fallback — catches accented variants (e.g. "Julio Rodríguez" vs "Rodriguez")
+  // 3. Last-name fallback — catches accented variants (e.g. "Julio Rodríguez" vs "Rodriguez")
   const parts = playerName.trim().split(' ');
   const lastName  = parts[parts.length - 1];
   const firstName = parts[0];
@@ -106,28 +105,43 @@ async function findMlbPerson(playerName: string): Promise<MlbPerson | null> {
     const n = norm(p.fullName);
     return n.includes(norm(firstName)) && n.includes(norm(lastName));
   });
-  return byLast ?? lastData.people?.[0] ?? null;
+  const found = byLast ?? lastData.people?.[0] ?? null;
+  return found ? { person: found, isActive: false } : null;
 }
 
 async function fetchMlbStats(playerName: string): Promise<PlayerStats | null> {
-  const person = await findMlbPerson(playerName);
-  if (!person) {
+  const result = await findMlbPerson(playerName);
+  if (!result) {
     console.log(`[player-stats] MLB: no match for "${playerName}"`);
     return null;
   }
-  console.log(`[player-stats] MLB: matched "${person.fullName}" id=${person.id}`);
+  const { person, isActive } = result;
+  console.log(`[player-stats] MLB: matched "${person.fullName}" id=${person.id} active=${isActive}`);
 
-  // Try recent seasons first, then fall back to career
-  const seasonAttempts: Array<{ type: string; label: string }> = [
-    { type: 'season&season=2026', label: '2026' },
-    { type: 'season&season=2025', label: '2025' },
-    { type: 'season&season=2024', label: '2024' },
-    { type: 'career',             label: 'Career' },
-  ];
+  // Active players: try current season first, then prior seasons, then career.
+  // Inactive/retired players: skip 2026 (they won't have it), go career last.
+  const seasonAttempts = isActive
+    ? [
+        { statType: 'season', season: 2026 as number | null, label: '2026 SEASON' },
+        { statType: 'season', season: 2025 as number | null, label: '2025 SEASON' },
+        { statType: 'season', season: 2024 as number | null, label: '2024 SEASON' },
+        { statType: 'career', season: null,                  label: 'Career Highlights' },
+      ]
+    : [
+        { statType: 'season', season: 2025 as number | null, label: '2025 SEASON' },
+        { statType: 'season', season: 2024 as number | null, label: '2024 SEASON' },
+        { statType: 'career', season: null,                  label: 'Career Highlights' },
+      ];
 
-  for (const { type, label } of seasonAttempts) {
-    const url = `https://statsapi.mlb.com/api/v1/people/${person.id}` +
-                `?hydrate=stats(group=[hitting,pitching],type=[${type}]),currentTeam`;
+  for (const { statType, season, label } of seasonAttempts) {
+    // FIX: season param must be comma-separated INSIDE the hydrate parens, not a bare & in the URL.
+    // Wrong: ?hydrate=stats(...,type=[season&season=2026])  — & acts as URL separator
+    // Right: ?hydrate=stats(...,type=season,season=2026)
+    const seasonParam = season != null ? `,season=${season}` : '';
+    const url =
+      `https://statsapi.mlb.com/api/v1/people/${person.id}` +
+      `?hydrate=stats(group=[hitting,pitching],type=${statType}${seasonParam}),currentTeam`;
+
     const res = await fetch(url, { next: { revalidate: 0 } });
     if (!res.ok) continue;
 
@@ -158,8 +172,17 @@ async function fetchMlbStats(playerName: string): Promise<PlayerStats | null> {
     }
 
     if (entries.length > 0) {
-      console.log(`[player-stats] MLB: ${entries.length} stats for ${person.fullName} (${label})`);
-      return { playerName: person.fullName, sport: 'Baseball', team, season: label, stats: entries };
+      const isRetired = !isActive && statType === 'career';
+      console.log(`[player-stats] MLB: ${entries.length} stats for ${person.fullName} (${label}${isRetired ? ', retired' : ''})`);
+      return {
+        playerName: person.fullName,
+        sport: 'Baseball',
+        team,
+        season: label,
+        stats: entries,
+        source: 'MLB Stats API',
+        isRetired,
+      };
     }
   }
 
@@ -174,19 +197,14 @@ function getSplitStat(allStats: Record<string, unknown>[], groupName: string) {
   return (group?.splits as Record<string, unknown>[])?.[0]?.stat as Record<string, unknown> | undefined;
 }
 
-// ─── NBA via balldontlie (new v1 API) ─────────────────────────────────────────
-// Free tier at api.balldontlie.io requires an API key in the Authorization header.
-// Falls back to ESPN if no key configured.
+// ─── NBA via BallDontLie (v1 API) ─────────────────────────────────────────────
 
 async function fetchNbaStats(playerName: string): Promise<PlayerStats | null> {
   const apiKey = process.env.BALLDONTLIE_API_KEY?.trim();
-
   if (apiKey && apiKey !== 'your-balldontlie-key-here') {
     const result = await fetchNbaViaBallDontLie(playerName, apiKey);
     if (result) return result;
   }
-
-  // ESPN fallback
   return fetchNbaViaEspn(playerName);
 }
 
@@ -211,16 +229,30 @@ async function fetchNbaViaBallDontLie(playerName: string, apiKey: string): Promi
   }
   console.log(`[player-stats] BallDontLie: found ${player.first_name} ${player.last_name} id=${player.id}`);
 
-  // Try seasons newest-first: 2025-26, 2024-25, 2023-24
+  // Try newest season first: 2025 = 2025-26, 2024 = 2024-25
   for (const season of [2025, 2024, 2023]) {
-    const avgRes = await fetch(
-      `https://api.balldontlie.io/v1/season_averages?player_id=${player.id}&season=${season}`,
-      { headers: { Authorization: apiKey }, next: { revalidate: 0 } }
-    );
+    // Fetch season averages and (for current season) last 5 game stats in parallel
+    const fetchPromises: [Promise<Response>, Promise<Response | null>] = [
+      fetch(
+        `https://api.balldontlie.io/v1/season_averages?player_id=${player.id}&season=${season}`,
+        { headers: { Authorization: apiKey }, next: { revalidate: 0 } }
+      ),
+      season === 2025
+        ? fetch(
+            `https://api.balldontlie.io/v1/stats?player_ids[]=${player.id}&seasons[]=${season}&per_page=5`,
+            { headers: { Authorization: apiKey }, next: { revalidate: 0 } }
+          )
+        : Promise.resolve(null),
+    ];
+
+    const [avgRes, recentRes] = await Promise.all(fetchPromises);
     if (!avgRes.ok) continue;
 
     const avgData = await avgRes.json() as {
-      data?: { pts: number; reb: number; ast: number; fg_pct: number; fg3_pct?: number; stl: number; blk: number; games_played: number }[];
+      data?: {
+        pts: number; reb: number; ast: number; fg_pct: number;
+        fg3_pct?: number; stl: number; blk: number; games_played: number;
+      }[];
     };
     const avg = avgData.data?.[0];
     if (!avg) continue;
@@ -232,17 +264,35 @@ async function fetchNbaViaBallDontLie(playerName: string, apiKey: string): Promi
       { label: 'FG%', value: `${(Number(avg.fg_pct) * 100).toFixed(1)}%` },
     ];
     if (avg.fg3_pct != null) entries.push({ label: '3P%', value: `${(Number(avg.fg3_pct) * 100).toFixed(1)}%` });
-    if (avg.stl != null)     entries.push({ label: 'SPG', value: Number(avg.stl).toFixed(1) });
-    if (avg.blk != null)     entries.push({ label: 'BPG', value: Number(avg.blk).toFixed(1) });
+    if (avg.stl  != null)    entries.push({ label: 'SPG', value: Number(avg.stl).toFixed(1) });
+    if (avg.blk  != null)    entries.push({ label: 'BPG', value: Number(avg.blk).toFixed(1) });
 
-    const seasonLabel = `${season}-${String(season + 1).slice(2)}`;
-    console.log(`[player-stats] BallDontLie: ${entries.length} stats for season ${seasonLabel}`);
+    // Last-5-games PPG trend vs. season average
+    if (recentRes?.ok) {
+      try {
+        const recentData = await recentRes.json() as { data?: { pts: number }[] };
+        const games = recentData.data ?? [];
+        if (games.length >= 3) {
+          const slice = games.slice(0, 5);
+          const l5avg = slice.reduce((s, g) => s + Number(g.pts), 0) / slice.length;
+          const seasonPPG = Number(avg.pts);
+          const arrow = l5avg > seasonPPG + 2 ? '▲' : l5avg < seasonPPG - 2 ? '▼' : '→';
+          entries.push({ label: 'L5', value: `${l5avg.toFixed(1)} ${arrow}` });
+        }
+      } catch {
+        // last-5 is best-effort; silently skip on parse error
+      }
+    }
+
+    const seasonLabel = `${season}-${String(season + 1).slice(2)} SEASON`;
+    console.log(`[player-stats] BallDontLie: ${entries.length} stats (${seasonLabel})`);
     return {
       playerName: `${player.first_name} ${player.last_name}`,
       sport: 'Basketball',
       team: player.team?.full_name,
       season: seasonLabel,
       stats: entries,
+      source: 'BallDontLie',
     };
   }
 
@@ -281,9 +331,9 @@ async function fetchNbaViaEspn(playerName: string): Promise<PlayerStats | null> 
     const entries = parseEspnStats(statsData, ['PPG', 'RPG', 'APG', 'FG%', '3P%', 'PTS', 'REB', 'AST', 'STL', 'BLK']);
 
     if (entries.length > 0) {
-      const seasonLabel = `${season - 1}-${String(season).slice(2)}`;
+      const seasonLabel = `${season - 1}-${String(season).slice(2)} SEASON`;
       console.log(`[player-stats] ESPN NBA: ${entries.length} stats (${seasonLabel})`);
-      return { playerName: fullName, sport: 'Basketball', team, season: seasonLabel, stats: entries };
+      return { playerName: fullName, sport: 'Basketball', team, season: seasonLabel, stats: entries, source: 'ESPN' };
     }
   }
 
@@ -320,14 +370,14 @@ async function fetchNflStats(playerName: string): Promise<PlayerStats | null> {
   console.log(`[player-stats] NFL: matched "${fullName}" id=${athleteId} pos=${position}`);
 
   const wantedByPos: Record<string, string[]> = {
-    QB: ['YDS', 'TD', 'INT', 'CMP%', 'RTG', 'PYDS'],
+    QB: ['YDS', 'TD', 'INT', 'CMP%', 'QBR', 'RTG', 'PYDS'],
     RB: ['YDS', 'TD', 'AVG', 'CAR', 'RYDS'],
     WR: ['REC', 'YDS', 'TD', 'AVG', 'REYDS'],
     TE: ['REC', 'YDS', 'TD', 'AVG'],
   };
   const wanted = wantedByPos[position] ?? ['YDS', 'TD', 'REC', 'INT', 'AVG'];
 
-  // Try 2025 (most recent full season), 2024, 2023
+  // Try 2025 (most recent full season) then fall back
   for (const season of [2025, 2024, 2023]) {
     const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/${season}/athletes/${athleteId}/statistics/0`;
     const statsRes = await fetch(url, { next: { revalidate: 0 } });
@@ -340,23 +390,96 @@ async function fetchNflStats(playerName: string): Promise<PlayerStats | null> {
     if (entries.length > 0) {
       console.log(`[player-stats] NFL: ${entries.length} stats for ${fullName} (${season})`);
       const injuryStatus = (athlete.injuries as Record<string, string>[] | undefined)?.[0]?.status;
-      return { playerName: fullName, sport: 'Football', team, season: String(season), stats: entries, injuryStatus };
+      return {
+        playerName: fullName,
+        sport: 'Football',
+        team,
+        season: `${season} SEASON`,
+        stats: entries,
+        source: 'ESPN',
+        injuryStatus,
+      };
     }
   }
 
-  // Fallback: position + team at minimum
+  // Position + team minimum fallback
   const fallback: PlayerStat[] = [];
   if (position) fallback.push({ label: 'POS',  value: position });
   if (team)     fallback.push({ label: 'TEAM', value: team });
   if (fallback.length) {
-    return { playerName: fullName, sport: 'Football', team, season: '2025', stats: fallback };
+    return { playerName: fullName, sport: 'Football', team, season: '2025 SEASON', stats: fallback, source: 'ESPN' };
+  }
+
+  return null;
+}
+
+// ─── Golf via ESPN ────────────────────────────────────────────────────────────
+
+async function fetchGolfStats(playerName: string): Promise<PlayerStats | null> {
+  const searchRes = await fetch(
+    `https://site.api.espn.com/apis/site/v2/sports/golf/pga/athletes` +
+    `?search=${encodeURIComponent(playerName)}&limit=10`,
+    { next: { revalidate: 0 } }
+  );
+  console.log(`[player-stats] Golf search status: ${searchRes.status}`);
+  if (!searchRes.ok) return null;
+
+  const searchData = await searchRes.json() as { items?: Record<string, unknown>[] };
+  const items = searchData.items ?? [];
+  if (!items.length) {
+    console.log(`[player-stats] Golf: no results for "${playerName}"`);
+    return null;
+  }
+
+  const athlete = (
+    items.find((a) => nameMatch(String(a.fullName ?? ''), playerName)) ?? items[0]
+  ) as Record<string, unknown>;
+
+  const athleteId = String(athlete.id ?? '');
+  const fullName  = String(athlete.fullName ?? playerName);
+  console.log(`[player-stats] Golf: matched "${fullName}" id=${athleteId}`);
+
+  // World ranking from athlete object (ESPN often includes it directly)
+  const entries: PlayerStat[] = [];
+  const rank = (athlete.rank as number | undefined) ?? (athlete.worldRanking as number | undefined);
+  if (rank) entries.push({ label: 'WR', value: `#${rank}` });
+
+  for (const season of [2025, 2024]) {
+    const statsRes = await fetch(
+      `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/seasons/${season}/athletes/${athleteId}/statistics/0`,
+      { next: { revalidate: 0 } }
+    );
+    if (!statsRes.ok) continue;
+
+    const statsData = await statsRes.json() as Record<string, unknown>;
+    const seasonEntries = parseEspnStats(
+      statsData,
+      ['WINS', 'TOP10', 'TOP25', 'CUTS', 'AVG', 'FEDEXPTS', 'EARNINGS', 'EVENTS']
+    );
+
+    if (seasonEntries.length > 0 || entries.length > 0) {
+      const combined = entries.filter((e) => !seasonEntries.find((s) => s.label === e.label));
+      const all = [...combined, ...seasonEntries];
+      console.log(`[player-stats] Golf: ${all.length} stats for ${fullName} (${season})`);
+      return {
+        playerName: fullName,
+        sport: 'Golf',
+        season: `${season} PGA TOUR`,
+        stats: all,
+        source: 'ESPN',
+      };
+    }
+  }
+
+  // Return ranking-only if no season stats
+  if (entries.length > 0) {
+    return { playerName: fullName, sport: 'Golf', season: '2025 PGA TOUR', stats: entries, source: 'ESPN' };
   }
 
   return null;
 }
 
 // ─── ESPN stats parser ────────────────────────────────────────────────────────
-// Used by both NBA and NFL (sports.core.api.espn.com has the same shape for both).
 
 function parseEspnStats(data: Record<string, unknown>, wanted: string[]): PlayerStat[] {
   const entries: PlayerStat[] = [];
@@ -390,7 +513,6 @@ function parseEspnStats(data: Record<string, unknown>, wanted: string[]): Player
 function extractEspnTeam(teamField: unknown): string | undefined {
   if (!teamField || typeof teamField !== 'object') return undefined;
   const t = teamField as Record<string, unknown>;
-  // Could be a full object or just a $ref
   if (typeof t.displayName === 'string') return t.displayName;
   if (typeof t.name === 'string') return t.name;
   return undefined;

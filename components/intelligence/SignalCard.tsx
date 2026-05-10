@@ -188,14 +188,15 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
       {/* ── Live stats strip ─────────────────────────────────────────────────── */}
       {!streaming && (
         <div className="px-5 py-3 border-t border-[rgba(0,212,255,0.06)] bg-[rgba(0,212,255,0.02)]">
-          <div className="flex items-center gap-2 mb-2.5">
+          <div className="flex items-center gap-2 mb-2.5 flex-wrap">
             <span className="flex items-center gap-1 bg-electric/20 text-electric border border-electric/40 text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm">
               <Activity size={8} />
-              Live Stats
+              {signal.playerStats?.isRetired ? 'Career Stats' : 'Live Stats'}
             </span>
             {signal.playerStats && (
               <span className="text-[10px] text-chrome-600 font-display">
                 {signal.playerStats.season}
+                {signal.playerStats.source && ` · ${signal.playerStats.source}`}
                 {signal.playerStats.team && ` · ${signal.playerStats.team}`}
               </span>
             )}
@@ -220,7 +221,7 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
               )}
             </div>
           ) : (
-            <p className="text-chrome-600 text-[11px] font-display italic">Stats unavailable for this player</p>
+            <p className="text-chrome-600 text-[11px] font-display italic">Historical player — using market data only</p>
           )}
         </div>
       )}

@@ -1,4 +1,4 @@
-export type Sport = 'Baseball' | 'Basketball' | 'Football' | 'Hockey' | 'Soccer';
+export type Sport = 'Baseball' | 'Basketball' | 'Football' | 'Hockey' | 'Soccer' | 'Golf';
 export type Condition = 'Raw' | 'PSA 10' | 'PSA 9' | 'PSA 8' | 'PSA 7' | 'BGS 9.5' | 'BGS 9' | 'SGC 10';
 export type SignalType = 'BUY' | 'SELL' | 'HOLD';
 
@@ -30,6 +30,8 @@ export interface PlayerStats {
   season: string;
   stats: PlayerStat[];
   injuryStatus?: string;
+  source?: string;
+  isRetired?: boolean;
 }
 
 export interface CardSignal {
