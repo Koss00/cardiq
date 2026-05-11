@@ -32,6 +32,7 @@ export interface PlayerStats {
   injuryStatus?: string;
   source?: string;
   isRetired?: boolean;
+  knownActive?: boolean;
 }
 
 export interface CardSignal {

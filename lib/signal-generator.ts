@@ -1,7 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Card, CardSignal, PlayerStats } from '@/types';
 import { hashCard, getCachedSignal, setCachedSignal } from './cache';
-import { fetchPlayerStats } from './player-stats';
+import { fetchPlayerStats, KNOWN_ACTIVE } from './player-stats';
+
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
 
 const client = new Anthropic();
 
@@ -46,6 +50,7 @@ function buildStatsSection(stats: PlayerStats): string {
     lines.push('NOTE: This player is RETIRED. Stats above are career totals, not current performance.');
     lines.push('For playerContext: emphasize legacy, HOF candidacy, and collectibility over active performance.');
   } else {
+    if (stats.knownActive) lines.push('CONFIRMED ACTIVE PLAYER — currently playing, not retired.');
     lines.push('Use these real stats to strengthen the playerContext dimension of your analysis.');
   }
   return lines.join('\n');
@@ -74,7 +79,13 @@ export async function generateSignalForCard(card: Card, force = false): Promise<
 
   if (!force) {
     const cached = getCachedSignal(hash);
-    if (cached) return cached as CardSignal;
+    if (cached) {
+      const cachedSignal = cached as CardSignal;
+      // If the cached signal has no player stats, force regeneration so the
+      // hardcoded fallback stats get a chance to populate it
+      if (cachedSignal.playerStats) return cachedSignal;
+      console.log(`[signal] cached signal for "${card.player}" has no playerStats — regenerating`);
+    }
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -91,9 +102,12 @@ export async function generateSignalForCard(card: Card, force = false): Promise<
     console.warn(`[signal] stats fetch skipped for ${card.player}:`, err);
   }
 
+  const isKnownActive = KNOWN_ACTIVE.has(norm(card.player));
   const statsSection = playerStats
     ? buildStatsSection(playerStats)
-    : '━━━ PLAYER STATS ━━━\nNo live stats available — base analysis on card fundamentals only.';
+    : isKnownActive
+      ? `━━━ PLAYER STATS ━━━\nCONFIRMED ACTIVE PLAYER — ${card.player} is currently active (not retired). Live stats temporarily unavailable. Do NOT treat as a historical/retired player in your analysis.`
+      : '━━━ PLAYER STATS ━━━\nNo live stats available — base analysis on card fundamentals only.';
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
