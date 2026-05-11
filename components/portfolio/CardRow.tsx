@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Trash2, RefreshCw, Loader2, ExternalLink } from 'lucide-react';
 import { Card, EbayListing, SignalType } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
 import { useStore } from '@/lib/store';
@@ -79,18 +80,26 @@ export default function CardRow({ card, signal }: Props) {
       {/* Card info */}
       <td className="py-3 px-4">
         <div className="flex items-center gap-3">
-          <MiniCard card={card} />
-          <div>
-        <p className="font-card text-base text-white uppercase tracking-wide leading-tight">{card.player}</p>
-        <p className="text-chrome-500 text-xs mt-0.5 font-display">
-          {card.year} {card.brand}
-          {card.cardNumber && ` #${card.cardNumber}`}
-        </p>
-        {card.variation && (
-          <span className="inline-block mt-1 text-[10px] font-display font-black uppercase tracking-wider text-gold-400 bg-gold-400/10 border border-[rgba(245,200,66,0.2)] px-1.5 py-0.5 rounded-sm">
-            {card.variation}
-          </span>
-        )}
+          <Link href={`/portfolio/${card.id}`} className="flex-shrink-0">
+            <MiniCard card={card} />
+          </Link>
+          <div className="min-w-0">
+            <Link
+              href={`/portfolio/${card.id}`}
+              className="group flex items-center gap-1.5"
+            >
+              <p className="font-card text-base text-white uppercase tracking-wide leading-tight group-hover:text-electric transition-colors">{card.player}</p>
+              <ExternalLink size={10} className="text-chrome-700 group-hover:text-electric transition-colors flex-shrink-0" />
+            </Link>
+            <p className="text-chrome-500 text-xs mt-0.5 font-display">
+              {card.year} {card.brand}
+              {card.cardNumber && ` #${card.cardNumber}`}
+            </p>
+            {card.variation && (
+              <span className="inline-block mt-1 text-[10px] font-display font-black uppercase tracking-wider text-gold-400 bg-gold-400/10 border border-[rgba(245,200,66,0.2)] px-1.5 py-0.5 rounded-sm">
+                {card.variation}
+              </span>
+            )}
           </div>
         </div>
       </td>

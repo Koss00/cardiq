@@ -192,6 +192,24 @@ body {
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
+/* Invisible face must not intercept clicks — backface-visibility hides it
+   visually but does NOT disable pointer events in most browsers. */
+.card-flip-inner:not(.is-flipped) .card-face-back {
+  pointer-events: none;
+}
+.card-flip-inner.is-flipped .card-face-front {
+  pointer-events: none;
+}
+
+/* Hide scrollbar while keeping scroll functionality */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Shimmer burst fires on the wrapper so it never touches the perspective container */
 .card-flip-wrapper.is-flipping .card-holo-layer {
   opacity: 1 !important;

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { Trash2, RefreshCw, Loader2, ExternalLink, Camera } from 'lucide-react';
-import { Card, EbayListing, SignalType } from '@/types';
+import { Card, CardSignal, EbayListing, SignalType } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import CardSilhouette from './CardSilhouette';
+import PriceSparkline from '@/components/intelligence/PriceSparkline';
 
 const SIGNAL_STYLES: Record<SignalType, { bg: string; text: string; border: string }> = {
   BUY:  { bg: 'bg-emerald-500/20', text: 'text-emerald-300', border: 'border-emerald-500/30' },
@@ -44,9 +46,10 @@ function Divider() {
 interface Props {
   card: Card;
   signal?: SignalType;
+  cardSignal?: CardSignal;
 }
 
-export default function TradingCard({ card, signal }: Props) {
+export default function TradingCard({ card, signal, cardSignal }: Props) {
   const { dispatch } = useStore();
   const [flipped, setFlipped]       = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -246,92 +249,112 @@ export default function TradingCard({ card, signal }: Props) {
               <div className="card-holo-layer" />
               <div className="card-top-strip" />
 
-              <div className="relative z-[2] h-full flex flex-col bg-[#0A1628] px-3 pt-3 pb-2 overflow-hidden">
+              <div className="relative z-[2] h-full flex flex-col bg-[#0A1628] overflow-hidden">
 
-                {/* Player name */}
-                <div className="flex-shrink-0">
-                  <p className="font-card text-lg text-white uppercase leading-tight tracking-wide truncate">{card.player}</p>
-                  <p className="font-display font-black uppercase text-chrome-500 mt-0.5" style={{ fontSize: '8px', letterSpacing: '1.5px' }}>
-                    {card.year} · {card.brand}
-                  </p>
-                </div>
+                {/* ── Scrollable body ─────────────────────────────── */}
+                <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 pt-3 space-y-0">
 
-                <Divider />
-
-                {/* Card details — 2-column grid */}
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 flex-shrink-0">
-                  {details.map(({ label, value }) => (
-                    <div key={label} className="min-w-0">
-                      <p className="font-display font-black uppercase text-chrome-500 leading-none mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>{label}</p>
-                      <p className="font-display font-bold text-white leading-tight truncate" style={{ fontSize: '14px' }}>{value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <Divider />
-
-                {/* Financials */}
-                <div className="flex-shrink-0">
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(192,200,216,0.1)' }}>
-                      <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Paid</p>
-                      <p className="font-display font-black text-chrome-300 leading-none" style={{ fontSize: '20px' }}>{formatCurrency(card.purchasePrice)}</p>
-                    </div>
-                    <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(0,212,255,0.18)' }}>
-                      <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Value</p>
-                      <p className="font-display font-black text-white leading-none" style={{ fontSize: '20px' }}>{formatCurrency(card.currentValue)}</p>
-                    </div>
+                  {/* Player name */}
+                  <div>
+                    <p className="font-card text-lg text-white uppercase leading-tight tracking-wide truncate">{card.player}</p>
+                    <p className="font-display font-black uppercase text-chrome-500 mt-0.5" style={{ fontSize: '8px', letterSpacing: '1.5px' }}>
+                      {card.year} · {card.brand}
+                    </p>
                   </div>
 
-                  {/* ROI */}
-                  <div className="text-center mb-2">
-                    <p className={`font-display font-black leading-none ${roiColor(roi)}`} style={{ fontSize: '36px' }}>{formatPct(roi)}</p>
-                    <p className="font-display font-black uppercase text-chrome-500 mt-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Return on Investment</p>
+                  <Divider />
+
+                  {/* Card details — 2-column grid */}
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    {details.map(({ label, value }) => (
+                      <div key={label} className="min-w-0">
+                        <p className="font-display font-black uppercase text-chrome-500 leading-none mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>{label}</p>
+                        <p className="font-display font-bold text-white leading-tight truncate" style={{ fontSize: '14px' }}>{value}</p>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Signal */}
-                  {sig && signal && (
-                    <div className={`rounded-sm py-1.5 px-2 text-center border ${sig.bg} ${sig.border}`}>
-                      <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Signal</p>
-                      <p className={`font-display font-black uppercase leading-none ${sig.text}`} style={{ fontSize: '14px' }}>{signal}</p>
+                  <Divider />
+
+                  {/* Financials */}
+                  <div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(192,200,216,0.1)' }}>
+                        <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Paid</p>
+                        <p className="font-display font-black text-chrome-300 leading-none" style={{ fontSize: '18px' }}>{formatCurrency(card.purchasePrice)}</p>
+                      </div>
+                      <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(0,212,255,0.18)' }}>
+                        <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Value</p>
+                        <p className="font-display font-black text-white leading-none" style={{ fontSize: '18px' }}>{formatCurrency(card.currentValue)}</p>
+                      </div>
                     </div>
+
+                    {/* ROI */}
+                    <div className="text-center mb-2">
+                      <p className={`font-display font-black leading-none ${roiColor(roi)}`} style={{ fontSize: '30px' }}>{formatPct(roi)}</p>
+                      <p className="font-display font-black uppercase text-chrome-500 mt-0.5" style={{ fontSize: '9px', letterSpacing: '1.5px' }}>Return on Investment</p>
+                    </div>
+
+                    {/* Signal */}
+                    {sig && signal && (
+                      <div className={`rounded-sm py-1.5 px-2 text-center border ${sig.bg} ${sig.border}`}>
+                        <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Signal</p>
+                        <p className={`font-display font-black uppercase leading-none ${sig.text}`} style={{ fontSize: '13px' }}>{signal}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sparkline */}
+                  {cardSignal?.priceHistory && cardSignal.priceHistory.length >= 2 && (
+                    <>
+                      <Divider />
+                      <div data-no-flip>
+                        <PriceSparkline
+                          points={cardSignal.priceHistory}
+                          cardId={card.id}
+                          className="w-full"
+                        />
+                      </div>
+                    </>
                   )}
+
+                  {/* Bottom padding so last item isn't flush against footer */}
+                  <div className="h-2" />
                 </div>
 
-                {/* Spacer */}
-                <div className="flex-1 min-h-0" />
-
-                <Divider />
-
-                {/* CTA */}
-                <button
-                  data-no-flip
-                  className="flex-shrink-0 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-sm btn-gold font-display font-black uppercase"
-                  style={{ fontSize: '9px', letterSpacing: '1.5px' }}
-                >
-                  <ExternalLink size={9} />
-                  View Full Details
-                </button>
-
-                {/* Utility */}
-                <div className="flex gap-1.5 mt-1.5 flex-shrink-0" data-no-flip>
-                  <button
-                    onClick={refreshPrice}
-                    disabled={refreshing}
-                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[rgba(0,212,255,0.12)] text-chrome-400 hover:text-electric font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
-                    style={{ fontSize: '8px' }}
+                {/* ── Pinned footer ────────────────────────────────── */}
+                <div className="flex-shrink-0 px-3 pb-2 pt-1 border-t border-[rgba(245,200,66,0.2)] bg-[#0A1628]">
+                  {/* CTA */}
+                  <Link
+                    href={`/portfolio/${card.id}`}
+                    data-no-flip
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-sm btn-gold font-display font-black uppercase mb-1.5"
+                    style={{ fontSize: '9px', letterSpacing: '1.5px' }}
                   >
-                    {refreshing ? <Loader2 size={7} className="animate-spin" /> : <RefreshCw size={7} />}
-                    Refresh
-                  </button>
-                  <button
-                    onClick={handleRemove}
-                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[rgba(255,51,102,0.12)] text-chrome-400 hover:text-red-400 font-display font-black uppercase tracking-widest transition-colors"
-                    style={{ fontSize: '8px' }}
-                  >
-                    <Trash2 size={7} />
-                    Remove
-                  </button>
+                    <ExternalLink size={9} />
+                    View Full Details
+                  </Link>
+
+                  {/* Utility */}
+                  <div className="flex gap-1.5" data-no-flip>
+                    <button
+                      onClick={refreshPrice}
+                      disabled={refreshing}
+                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[rgba(0,212,255,0.12)] text-chrome-400 hover:text-electric font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                      style={{ fontSize: '8px' }}
+                    >
+                      {refreshing ? <Loader2 size={7} className="animate-spin" /> : <RefreshCw size={7} />}
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleRemove}
+                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[rgba(255,51,102,0.12)] text-chrome-400 hover:text-red-400 font-display font-black uppercase tracking-widest transition-colors"
+                      style={{ fontSize: '8px' }}
+                    >
+                      <Trash2 size={7} />
+                      Remove
+                    </button>
+                  </div>
                 </div>
 
               </div>

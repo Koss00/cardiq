@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 import PortfolioStats from '@/components/portfolio/PortfolioStats';
 import CardRow from '@/components/portfolio/CardRow';
 import TradingCard from '@/components/portfolio/TradingCard';
-import { Card, SignalType } from '@/types';
+import { Card, CardSignal, SignalType } from '@/types';
 import { calcRoi } from '@/lib/utils';
 
 type SortKey = 'player' | 'purchasePrice' | 'currentValue' | 'roi';
@@ -49,6 +49,10 @@ export default function PortfolioPage() {
 
   function signalFor(card: Card): SignalType | undefined {
     return signals.find((s) => s.cardId === card.id)?.signal;
+  }
+
+  function cardSignalFor(card: Card): CardSignal | undefined {
+    return signals.find((s) => s.cardId === card.id);
   }
 
   if (cards.length === 0) {
@@ -118,7 +122,7 @@ export default function PortfolioPage() {
       {viewMode === 'grid' && (
         <div className="portfolio-grid">
           {sorted.map((card) => (
-            <TradingCard key={card.id} card={card} signal={signalFor(card)} />
+            <TradingCard key={card.id} card={card} signal={signalFor(card)} cardSignal={cardSignalFor(card)} />
           ))}
         </div>
       )}
