@@ -24,10 +24,15 @@ const SPORT_THEMES: Record<string, string> = {
 };
 
 const GRADE_STYLES: Record<string, string> = {
-  PSA: 'bg-[#003087] text-white border border-[#C8102E]/60',
-  BGS: 'bg-black text-[#F5C842] border border-[#F5C842]/50',
+  PSA: 'bg-[#003087] text-white border border-[#C8102E]/50',
+  BGS: 'bg-black text-[#F5C842] border border-[#F5C842]/40',
   SGC: 'bg-[#E85D04] text-white border border-[#E85D04]',
 };
+
+const ACTION_BTN = 'flex items-center gap-1.5 px-4 py-2 rounded-md border text-[10px] font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer';
+
+const INPUT_BASE =
+  'w-full bg-[#0A1628] border border-[rgba(192,200,216,0.14)] rounded-md px-3 py-2.5 text-sm font-sans text-white focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric/30 transition-all duration-200';
 
 export default function CardDetailPage() {
   const { cardId } = useParams<{ cardId: string }>();
@@ -50,12 +55,10 @@ export default function CardDetailPage() {
   const [showEdit, setShowEdit]   = useState(false);
   const [editPaid, setEditPaid]   = useState('');
   const [editValue, setEditValue] = useState('');
-
   const [showRemove, setShowRemove] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // Load persisted photo + cert from localStorage
   useEffect(() => {
     if (!card) return;
     const photo = localStorage.getItem(`cardiq:photo:${card.id}`);
@@ -68,7 +71,6 @@ export default function CardDetailPage() {
     ? `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim()
     : '';
 
-  // Fetch both eBay feeds on mount
   useEffect(() => {
     if (!ebayQuery) return;
     setEbayLoading(true);
@@ -101,7 +103,7 @@ export default function CardDetailPage() {
         setSoldListings(data.listings);
       }
     } catch { /* silent */ }
-    finally { setRefreshing(false); }
+    finally   { setRefreshing(false); }
   }, [card, ebayQuery, dispatch]);
 
   function handlePhotoFile(file: File) {
@@ -124,7 +126,7 @@ export default function CardDetailPage() {
       const data = await res.json();
       if (data.data) setPsaData(data.data as PsaCertData);
     } catch { /* silent */ }
-    finally { setPsaLoading(false); }
+    finally   { setPsaLoading(false); }
   }
 
   function openEdit() {
@@ -155,11 +157,8 @@ export default function CardDetailPage() {
   if (!card) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <p className="text-chrome-400 mb-4 font-display">Card not found in your collection.</p>
-        <Link
-          href="/portfolio"
-          className="btn-gold px-5 py-2.5 rounded-sm text-xs font-display font-black uppercase tracking-widest"
-        >
+        <p className="text-slate-400 mb-5 font-sans">Card not found in your collection.</p>
+        <Link href="/portfolio" className="btn-gold px-5 py-2.5 text-xs font-display font-black uppercase tracking-widest">
           Back to Collection
         </Link>
       </div>
@@ -174,7 +173,7 @@ export default function CardDetailPage() {
   const hasPriceHistory = signal?.priceHistory && signal.priceHistory.length >= 2;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-16 fade-in-up">
       <input
         ref={photoInputRef}
         type="file"
@@ -187,27 +186,26 @@ export default function CardDetailPage() {
         }}
       />
 
-      {/* ── Breadcrumb ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 text-xs font-display">
+      {/* ── Breadcrumb ──────────────────────────────────────────────── */}
+      <nav className="flex items-center gap-2 text-xs font-display" aria-label="Breadcrumb">
         <Link
           href="/portfolio"
-          className="flex items-center gap-1.5 text-chrome-500 hover:text-chrome-200 font-black uppercase tracking-widest transition-colors"
+          className="flex items-center gap-1.5 text-chrome-500 hover:text-chrome-200 font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer"
         >
-          <ArrowLeft size={13} />
-          Collection
+          <ArrowLeft size={13} />Collection
         </Link>
         <span className="text-chrome-700">/</span>
-        <span className="text-chrome-400 truncate">{card.player}</span>
-      </div>
+        <span className="text-chrome-400 truncate font-sans normal-case">{card.player}</span>
+      </nav>
 
-      {/* ── Hero panel ──────────────────────────────────────────── */}
-      <div className="chrome-panel overflow-hidden border border-[rgba(0,212,255,0.08)]">
+      {/* ── Hero panel ──────────────────────────────────────────────── */}
+      <div className="chrome-panel overflow-hidden">
         <div className="grid md:grid-cols-[280px_1fr]">
 
           {/* Card image */}
           <div
             className="relative flex items-center justify-center overflow-hidden"
-            style={{ background: theme, minHeight: 320 }}
+            style={{ background: theme, minHeight: 340 }}
           >
             {cardPhoto ? (
               <>
@@ -217,71 +215,76 @@ export default function CardDetailPage() {
                   alt={card.player}
                   className="absolute inset-0 w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0F1A2E]/50 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0D1A30]/50 pointer-events-none" />
                 <button
                   onClick={() => photoInputRef.current?.click()}
-                  className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-sm bg-black/60 border border-white/20 text-white/60 hover:text-white text-[9px] font-display font-black uppercase tracking-widest transition-colors"
+                  className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-black/60 border border-white/15 text-white/60 hover:text-white text-[9px] font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer backdrop-blur-sm"
                 >
-                  <Camera size={8} />
-                  Change
+                  <Camera size={9} />Change
                 </button>
               </>
             ) : (
               <button
                 onClick={() => photoInputRef.current?.click()}
-                className="flex flex-col items-center gap-3 text-chrome-600 hover:text-chrome-300 transition-colors py-12"
+                className="flex flex-col items-center gap-3 text-chrome-600 hover:text-chrome-300 transition-colors duration-200 py-14 cursor-pointer"
               >
-                <Camera size={32} strokeWidth={1.5} />
+                <Camera size={34} strokeWidth={1.5} />
                 <span className="text-[10px] font-display font-black uppercase tracking-widest">Add Photo</span>
               </button>
             )}
           </div>
 
           {/* Details */}
-          <div className="px-8 py-7 space-y-5 border-l border-[rgba(0,212,255,0.06)]">
+          <div className="px-8 py-8 space-y-6 border-l border-[rgba(192,200,216,0.06)]">
 
             {/* Title row */}
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 className="font-card text-4xl text-white uppercase tracking-wide leading-tight">{card.player}</h1>
-                <p className="text-chrome-500 text-sm font-display mt-1">
+                <h1 className="font-card text-4xl text-white uppercase tracking-wide leading-tight">
+                  {card.player}
+                </h1>
+                <p className="text-slate-500 text-sm font-sans mt-1.5">
                   {card.year} · {card.brand}
                   {card.cardNumber && ` · #${card.cardNumber}`}
                 </p>
                 {card.variation && (
-                  <span className="inline-block mt-2 text-[10px] font-display font-black uppercase tracking-wider text-gold-400 bg-gold-400/10 border border-[rgba(245,200,66,0.2)] px-2 py-0.5 rounded-sm">
+                  <span className="inline-block mt-2.5 text-[10px] font-display font-black uppercase tracking-wider text-gold-400 bg-[rgba(245,200,66,0.08)] border border-[rgba(245,200,66,0.18)] px-2.5 py-1 rounded-sm">
                     {card.variation}
                   </span>
                 )}
               </div>
               {grader && grade && (
-                <div className={`flex-shrink-0 px-3 py-2 rounded-sm text-center ${GRADE_STYLES[grader] ?? 'bg-navy-700 text-chrome-300 border border-chrome-700'}`}>
+                <div className={`flex-shrink-0 px-4 py-2.5 rounded-md text-center ${GRADE_STYLES[grader] ?? 'bg-[#0D1A30] text-chrome-300 border border-chrome-700'}`}>
                   <p className="text-[8px] font-display font-black uppercase tracking-widest opacity-60 mb-0.5">{grader}</p>
-                  <p className="text-2xl font-display font-black leading-tight">{grade}</p>
+                  <p className="text-2xl font-display font-black leading-tight tabular-nums">{grade}</p>
                 </div>
               )}
             </div>
 
-            {/* Financials */}
+            {/* Financial metrics */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Paid',  value: formatCurrency(card.purchasePrice), cls: 'text-chrome-200' },
-                { label: 'Value', value: formatCurrency(card.currentValue),  cls: 'text-white', highlight: true },
-                { label: 'ROI',   value: formatPct(roi),                     cls: roiColor(roi) },
+                { label: 'Paid',  value: formatCurrency(card.purchasePrice), cls: 'text-chrome-200', highlight: false },
+                { label: 'Value', value: formatCurrency(card.currentValue),  cls: 'text-white',      highlight: true  },
+                { label: 'ROI',   value: formatPct(roi),                     cls: roiColor(roi),     highlight: false },
               ].map(({ label, value, cls, highlight }) => (
                 <div
                   key={label}
-                  className={`rounded-sm px-4 py-3 text-center bg-navy-900/60 border ${highlight ? 'border-[rgba(0,212,255,0.2)]' : 'border-[rgba(192,200,216,0.07)]'}`}
+                  className={`rounded-md px-4 py-3.5 text-center ${
+                    highlight
+                      ? 'bg-[#0A1628] border border-[rgba(0,212,255,0.18)] shadow-electric/5'
+                      : 'bg-[#0A1628] border border-[rgba(192,200,216,0.08)]'
+                  }`}
                 >
-                  <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600 mb-1">{label}</p>
-                  <p className={`font-card text-2xl leading-tight ${cls}`}>{value}</p>
+                  <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600 mb-1.5">{label}</p>
+                  <p className={`font-card text-2xl leading-tight tabular-nums ${cls}`}>{value}</p>
                 </div>
               ))}
             </div>
 
-            {/* Meta row */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-display text-chrome-600">
-              <span className="font-black uppercase tracking-widest">{card.sport}</span>
+            {/* Meta */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-sans text-chrome-600">
+              <span className="font-black uppercase tracking-widest font-display">{card.sport}</span>
               <span className="text-chrome-800">·</span>
               <span>{card.condition}</span>
               {card.lastPriceUpdate && (
@@ -292,10 +295,12 @@ export default function CardDetailPage() {
               )}
             </div>
 
-            {/* PSA cert lookup (only for PSA-graded cards) */}
+            {/* PSA cert lookup */}
             {grader === 'PSA' && (
-              <div className="space-y-2">
-                <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600">PSA Cert Verification</p>
+              <div className="space-y-2.5">
+                <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600">
+                  PSA Cert Verification
+                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -303,20 +308,20 @@ export default function CardDetailPage() {
                     onChange={(e) => setCertInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && lookupPsa()}
                     placeholder="Enter cert number…"
-                    className="flex-1 bg-navy-800 border border-[rgba(0,212,255,0.12)] rounded-sm px-3 py-1.5 text-xs font-display text-chrome-300 placeholder:text-chrome-700 focus:outline-none focus:border-electric"
+                    aria-label="PSA cert number"
+                    className="flex-1 bg-[#0A1628] border border-[rgba(192,200,216,0.12)] rounded-md px-3 py-2 text-xs font-sans text-chrome-300 placeholder:text-chrome-700 focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric/25 transition-all duration-200"
                   />
                   <button
                     onClick={lookupPsa}
                     disabled={!certInput.trim() || psaLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.15)] text-chrome-400 hover:text-electric text-[10px] font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                    className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.14)] text-chrome-400 hover:text-electric disabled:opacity-40`}
                   >
                     {psaLoading ? <Loader2 size={10} className="animate-spin" /> : <ShieldCheck size={10} />}
                     Verify
                   </button>
                   {psaData && (
                     <span className="flex items-center gap-1 text-emerald-400 text-[10px] font-display font-black uppercase tracking-widest">
-                      <ShieldCheck size={10} />
-                      Verified
+                      <ShieldCheck size={10} /> Verified
                     </span>
                   )}
                 </div>
@@ -328,164 +333,159 @@ export default function CardDetailPage() {
               <button
                 onClick={refreshPrice}
                 disabled={refreshing}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.12)] text-chrome-400 hover:text-electric text-[10px] font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-electric disabled:opacity-40`}
               >
                 {refreshing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
                 Refresh Price
               </button>
               <button
                 onClick={openEdit}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.12)] text-chrome-400 hover:text-white text-[10px] font-display font-black uppercase tracking-widest transition-colors"
+                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-white`}
               >
-                <Edit2 size={11} />
-                Edit Values
+                <Edit2 size={11} />Edit Values
               </button>
               <button
                 onClick={() => setShowRemove(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-navy-700 border border-[rgba(255,51,102,0.12)] text-chrome-500 hover:text-red-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors"
+                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(255,51,102,0.12)] text-chrome-500 hover:text-red-400 hover:border-red-500/25`}
               >
-                <Trash2 size={11} />
-                Remove
+                <Trash2 size={11} />Remove
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Signal intelligence ─────────────────────────────────── */}
+      {/* ── Signal intelligence ─────────────────────────────────────── */}
       {signal && <SignalCard signal={signal} />}
       {!signal && (
-        <div className="chrome-panel px-6 py-5 text-center">
-          <p className="text-chrome-600 text-sm font-display italic">
+        <div className="chrome-panel px-6 py-6 text-center">
+          <p className="text-chrome-600 text-sm font-sans italic">
             No intelligence signal yet — visit the Intelligence tab to generate one.
           </p>
         </div>
       )}
 
-      {/* ── Price history ───────────────────────────────────────── */}
-      <div className="chrome-panel px-6 py-5">
-        <h2 className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-4">Price History</h2>
+      {/* ── Price history ───────────────────────────────────────────── */}
+      <div className="chrome-panel px-6 py-6">
+        <h2 className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-5">
+          Price History
+        </h2>
         {hasPriceHistory ? (
           <PriceHistoryChart points={signal!.priceHistory!} cardId={card.id} height={200} />
         ) : (
-          <p className="text-chrome-600 text-sm font-display italic">
+          <p className="text-chrome-600 text-sm font-sans italic">
             Refresh the price a few times to build a trend line.
           </p>
         )}
       </div>
 
-      {/* ── eBay market ─────────────────────────────────────────── */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <EbaySection
-          title="eBay Market Prices"
-          listings={soldListings}
-          loading={ebayLoading}
-          valueColor="text-gold-400"
-        />
-        <EbaySection
-          title="Active eBay Listings"
-          listings={activeListings}
-          loading={ebayLoading}
-          valueColor="text-electric"
-        />
+      {/* ── eBay market ─────────────────────────────────────────────── */}
+      <div className="grid md:grid-cols-2 gap-5">
+        <EbaySection title="eBay Sold Prices"    listings={soldListings}   loading={ebayLoading} valueColor="text-gold-400"  />
+        <EbaySection title="Active eBay Listings" listings={activeListings} loading={ebayLoading} valueColor="text-electric" />
       </div>
 
-      {/* ── PSA cert details ────────────────────────────────────── */}
+      {/* ── PSA cert details ────────────────────────────────────────── */}
       {psaData && (
-        <div className="chrome-panel px-6 py-5">
-          <div className="flex items-center gap-2 mb-4">
-            <ShieldCheck size={13} className="text-emerald-400" />
-            <h2 className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500">PSA Cert Verified</h2>
+        <div className="chrome-panel px-6 py-6">
+          <div className="flex items-center gap-2.5 mb-5">
+            <ShieldCheck size={14} className="text-emerald-400" />
+            <h2 className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500">
+              PSA Cert Verified
+            </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
               { label: 'Cert #',  value: psaData.certNumber },
-              { label: 'Grade',   value: psaData.grade },
-              { label: 'Subject', value: psaData.subject },
-              { label: 'Year',    value: psaData.year },
-              { label: 'Brand',   value: psaData.brand },
+              { label: 'Grade',   value: psaData.grade      },
+              { label: 'Subject', value: psaData.subject    },
+              { label: 'Year',    value: psaData.year       },
+              { label: 'Brand',   value: psaData.brand      },
               { label: 'Card #',  value: psaData.cardNumber },
               ...(psaData.variety ? [{ label: 'Variety', value: psaData.variety }] : []),
             ].map(({ label, value }) => (
-              <div key={label} className="bg-navy-800 border border-[rgba(0,212,255,0.08)] rounded-sm px-3 py-2">
-                <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600 mb-0.5">{label}</p>
-                <p className="text-chrome-200 text-sm font-display font-black truncate">{value}</p>
+              <div key={label} className="bg-[#0A1628] border border-[rgba(192,200,216,0.08)] rounded-md px-3.5 py-3">
+                <p className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-600 mb-1">{label}</p>
+                <p className="text-chrome-200 text-sm font-sans font-semibold truncate">{value}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Edit modal ──────────────────────────────────────────── */}
+      {/* ── Edit modal ──────────────────────────────────────────────── */}
       {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/85 backdrop-blur-sm">
-          <div className="chrome-panel w-full max-w-sm p-6 space-y-5 border border-[rgba(0,212,255,0.15)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#060E1C]/90 backdrop-blur-md">
+          <div className="chrome-panel w-full max-w-sm p-7 space-y-6 border border-[rgba(0,212,255,0.14)]">
             <div className="flex items-center justify-between">
               <h2 className="font-card text-xl text-white uppercase tracking-wide">Edit Values</h2>
-              <button onClick={() => setShowEdit(false)} className="text-chrome-600 hover:text-chrome-300 transition-colors">
+              <button
+                onClick={() => setShowEdit(false)}
+                className="text-chrome-600 hover:text-chrome-200 transition-colors duration-200 cursor-pointer p-1"
+                aria-label="Close"
+              >
                 <X size={16} />
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
-                { label: 'Purchase Price ($)', val: editPaid,  set: setEditPaid  },
-                { label: 'Current Value ($)',  val: editValue, set: setEditValue  },
-              ].map(({ label, val, set }) => (
-                <div key={label}>
-                  <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1 block">{label}</label>
+                { label: 'Purchase Price ($)', id: 'editPaid',  val: editPaid,  set: setEditPaid  },
+                { label: 'Current Value ($)',  id: 'editValue', val: editValue, set: setEditValue  },
+              ].map(({ label, id, val, set }) => (
+                <div key={id}>
+                  <label htmlFor={id} className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-2 block">
+                    {label}
+                  </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    id={id}
+                    type="number" min="0" step="0.01"
                     value={val}
                     onChange={(e) => set(e.target.value)}
-                    className="w-full bg-navy-800 border border-[rgba(0,212,255,0.12)] rounded-sm px-3 py-2 text-sm font-display text-white focus:outline-none focus:border-electric"
+                    className={INPUT_BASE}
                   />
                 </div>
               ))}
             </div>
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowEdit(false)}
-                className="flex-1 py-2 rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest"
+                className="flex-1 py-2.5 rounded-md bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
               >
                 Cancel
               </button>
               <button
                 onClick={saveEdit}
-                className="flex-1 py-2 rounded-sm btn-gold text-[10px] font-display font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-sm btn-gold text-[10px] font-display font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
               >
-                <Check size={11} />
-                Save
+                <Check size={11} />Save
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Remove confirm modal ─────────────────────────────────── */}
+      {/* ── Remove modal ────────────────────────────────────────────── */}
       {showRemove && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/85 backdrop-blur-sm">
-          <div className="chrome-panel w-full max-w-sm p-6 space-y-5 border border-[rgba(255,51,102,0.15)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#060E1C]/90 backdrop-blur-md">
+          <div className="chrome-panel w-full max-w-sm p-7 space-y-5 border border-red-500/15">
             <h2 className="font-card text-xl text-white uppercase tracking-wide">Remove Card?</h2>
-            <p className="text-chrome-400 text-sm font-display leading-relaxed">
+            <p className="text-slate-400 text-sm font-sans leading-relaxed">
               This will permanently remove{' '}
-              <span className="text-white font-black">{card.player}</span>{' '}
+              <span className="text-white font-semibold">{card.player}</span>{' '}
               from your collection. This cannot be undone.
             </p>
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowRemove(false)}
-                className="flex-1 py-2 rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest"
+                className="flex-1 py-2.5 rounded-md bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRemove}
-                className="flex-1 py-2 rounded-sm bg-red-500/20 border border-red-500/30 text-red-300 text-[10px] font-display font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-md bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 text-[10px] font-display font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Trash2 size={11} />
-                Remove
+                <Trash2 size={11} />Remove
               </button>
             </div>
           </div>
@@ -495,63 +495,55 @@ export default function CardDetailPage() {
   );
 }
 
-// ── eBay listing section ──────────────────────────────────────────────────────
-
 function EbaySection({
-  title,
-  listings,
-  loading,
-  valueColor,
+  title, listings, loading, valueColor,
 }: {
-  title: string;
-  listings: EbayListing[];
-  loading: boolean;
-  valueColor: string;
+  title: string; listings: EbayListing[]; loading: boolean; valueColor: string;
 }) {
   return (
     <div className="chrome-panel overflow-hidden">
-      <div className="px-5 py-3 border-b border-[rgba(0,212,255,0.06)]">
+      <div className="px-5 py-4 border-b border-[rgba(192,200,216,0.06)]">
         <h2 className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500">{title}</h2>
       </div>
       {loading ? (
-        <div className="flex items-center justify-center py-10">
+        <div className="flex items-center justify-center py-12">
           <Loader2 size={20} className="animate-spin text-chrome-700" />
         </div>
       ) : listings.length > 0 ? (
-        <div className="divide-y divide-[rgba(0,212,255,0.05)]">
+        <div className="divide-y divide-[rgba(192,200,216,0.05)]">
           {listings.slice(0, 5).map((l, i) => (
             <a
               key={i}
               href={l.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 px-5 py-3 hover:bg-navy-700/30 transition-colors group"
+              className="flex items-center gap-3.5 px-5 py-3.5 hover:bg-[#0F2040] transition-colors duration-200 group cursor-pointer"
             >
               {l.imageUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={l.imageUrl}
                   alt=""
-                  className="w-10 h-10 object-cover rounded-sm flex-shrink-0 opacity-80"
+                  className="w-10 h-10 object-cover rounded-sm flex-shrink-0 opacity-75 group-hover:opacity-100 transition-opacity duration-200"
                 />
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-chrome-300 text-xs font-display leading-snug line-clamp-2 group-hover:text-white transition-colors">
+                <p className="text-chrome-300 text-xs font-sans leading-snug line-clamp-2 group-hover:text-white transition-colors duration-200">
                   {l.title}
                 </p>
                 {l.condition && (
-                  <p className="text-chrome-600 text-[10px] font-display mt-0.5">{l.condition}</p>
+                  <p className="text-chrome-600 text-[10px] font-sans mt-0.5">{l.condition}</p>
                 )}
               </div>
-              <div className={`flex items-center gap-1 ${valueColor} font-display font-black text-sm flex-shrink-0`}>
+              <div className={`flex items-center gap-1 ${valueColor} font-sans font-bold text-sm flex-shrink-0 tabular-nums`}>
                 {formatCurrency(l.price)}
-                <ExternalLink size={9} className="opacity-60" />
+                <ExternalLink size={9} className="opacity-50" />
               </div>
             </a>
           ))}
         </div>
       ) : (
-        <p className="px-5 py-5 text-chrome-600 text-sm font-display italic">No listings found.</p>
+        <p className="px-5 py-6 text-chrome-600 text-sm font-sans italic">No listings found.</p>
       )}
     </div>
   );

@@ -31,6 +31,9 @@ const config: Config = {
           300: '#B8C0D0',
           400: '#8A96AB',
           500: '#626E82',
+          600: '#4A5568',
+          700: '#2D3748',
+          800: '#1A2235',
         },
         electric: {
           DEFAULT: '#00D4FF',
@@ -45,6 +48,7 @@ const config: Config = {
         },
       },
       fontFamily: {
+        sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         display: ['var(--font-display)', 'sans-serif'],
         card: ['var(--font-card)', 'sans-serif'],
       },

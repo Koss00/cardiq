@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${barlowCondensed.variable} ${bebasNeue.variable} font-sans bg-navy-900 text-slate-100 min-h-screen chrome-texture`}
+        className={`${inter.variable} ${barlowCondensed.variable} ${bebasNeue.variable} font-sans antialiased bg-[#060E1C] text-slate-100 min-h-screen chrome-texture`}
       >
         {children}
       </body>
