@@ -86,6 +86,7 @@ export async function fetchPlayerStats(playerName: string, sport: string): Promi
     else if (sport === 'Basketball') stats = await fetchNbaStats(playerName);
     else if (sport === 'Football')   stats = await fetchNflStats(playerName);
     else if (sport === 'Hockey')     stats = await fetchNhlStats(playerName);
+    else if (sport === 'Soccer')     stats = await fetchSoccerStats(playerName);
     else if (sport === 'Golf')       stats = await fetchGolfStats(playerName);
   } catch (err) {
     console.error(`[player-stats] ${sport} failed for "${playerName}":`, err);
@@ -717,6 +718,72 @@ async function fetchNhlStats(playerName: string): Promise<PlayerStats | null> {
     source: 'NHL API',
     isRetired,
   };
+}
+
+// ─── Soccer via ESPN ─────────────────────────────────────────────────────────
+
+async function fetchSoccerStats(playerName: string): Promise<PlayerStats | null> {
+  // Try major leagues in order: EPL, La Liga, Bundesliga, Serie A, MLS
+  const leagues = [
+    { slug: 'eng.1', name: 'Premier League' },
+    { slug: 'esp.1', name: 'La Liga' },
+    { slug: 'ger.1', name: 'Bundesliga' },
+    { slug: 'ita.1', name: 'Serie A' },
+    { slug: 'usa.1', name: 'MLS' },
+  ];
+
+  for (const league of leagues) {
+    try {
+      const searchRes = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/soccer/${league.slug}/athletes` +
+        `?search=${encodeURIComponent(playerName)}&limit=5`,
+        { next: { revalidate: 0 } }
+      );
+      if (!searchRes.ok) continue;
+
+      const searchData = await searchRes.json() as { items?: Record<string, unknown>[] };
+      const items = searchData.items ?? [];
+      if (!items.length) continue;
+
+      const athlete = (
+        items.find((a) => nameMatch(String(a.fullName ?? ''), playerName)) ?? items[0]
+      ) as Record<string, unknown>;
+
+      const athleteId = String(athlete.id ?? '');
+      const fullName  = String(athlete.fullName ?? playerName);
+      const team      = extractEspnTeam(athlete.team);
+      console.log(`[player-stats] Soccer: matched "${fullName}" in ${league.name} id=${athleteId}`);
+
+      // Fetch current season stats
+      for (const season of [2025, 2024]) {
+        const statsRes = await fetch(
+          `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league.slug}/seasons/${season}/athletes/${athleteId}/statistics/0`,
+          { next: { revalidate: 0 } }
+        );
+        if (!statsRes.ok) continue;
+
+        const statsData = await statsRes.json() as Record<string, unknown>;
+        const entries = parseEspnStats(statsData, ['G', 'A', 'SHT', 'SHOG', 'FC', 'APP', 'GLS', 'AST']);
+
+        if (entries.length > 0) {
+          const seasonLabel = `${season - 1}/${String(season).slice(2)} SEASON`;
+          console.log(`[player-stats] Soccer: ${entries.length} stats for ${fullName} (${league.name} ${seasonLabel})`);
+          return {
+            playerName: fullName,
+            sport: 'Soccer',
+            team: team ? `${team} (${league.name})` : league.name,
+            season: seasonLabel,
+            stats: entries,
+            source: 'ESPN',
+          };
+        }
+      }
+    } catch (err) {
+      console.warn(`[player-stats] Soccer ${league.slug} failed:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return null;
 }
 
 // ─── Golf via ESPN ────────────────────────────────────────────────────────────
