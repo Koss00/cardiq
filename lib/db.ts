@@ -61,6 +61,65 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_price_alerts_card
     ON price_alerts (card_id, created_at DESC)
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS card_signals (
+      id                 SERIAL PRIMARY KEY,
+      card_id            TEXT NOT NULL,
+      player             TEXT NOT NULL,
+      card_hash          TEXT NOT NULL,
+      signal             TEXT NOT NULL CHECK (signal IN ('BUY','SELL','HOLD')),
+      confidence         INTEGER NOT NULL,
+      summary            TEXT NOT NULL,
+      price_trend        TEXT,
+      player_context     TEXT,
+      scarcity_note      TEXT,
+      market_context     TEXT,
+      price_target       NUMERIC(10,2),
+      timeframe          TEXT,
+      wyckoff_regime     TEXT,
+      market_heat_score  INTEGER,
+      ev_per_dollar      NUMERIC(6,4),
+      quality_score      INTEGER,
+      quality_rationale  TEXT,
+      outcome_price      NUMERIC(10,2),
+      outcome_pct        NUMERIC(6,2),
+      outcome_correct    BOOLEAN,
+      outcome_checked_at TIMESTAMPTZ,
+      generated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_card_signals_hash
+    ON card_signals (card_hash, generated_at DESC)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_card_signals_pending_outcome
+    ON card_signals (generated_at)
+    WHERE outcome_checked_at IS NULL AND price_target IS NOT NULL
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS market_narratives (
+      id                SERIAL PRIMARY KEY,
+      portfolio_hash    TEXT NOT NULL UNIQUE,
+      narrative         TEXT NOT NULL,
+      themes            JSONB NOT NULL DEFAULT '[]',
+      contradictions    JSONB NOT NULL DEFAULT '[]',
+      top_opportunity   TEXT,
+      top_risk          TEXT,
+      regime_summary    TEXT,
+      signal_win_rate   NUMERIC(4,1),
+      computed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_market_narratives_hash
+    ON market_narratives (portfolio_hash, computed_at DESC)
+  `;
 }
 
 // ─── Cards CRUD ───────────────────────────────────────────────────────────────
@@ -184,6 +243,195 @@ export async function dbGetActiveAlerts(): Promise<AlertRow[]> {
 
 export async function dbDismissAlert(id: number): Promise<void> {
   await sql`UPDATE price_alerts SET dismissed = TRUE WHERE id = ${id}`;
+}
+
+// ─── Signal history ───────────────────────────────────────────────────────────
+
+export interface SignalRow {
+  id?: number;
+  cardId: string;
+  player: string;
+  cardHash: string;
+  signal: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  summary: string;
+  priceTrend?: string;
+  playerContext?: string;
+  scarcityNote?: string;
+  marketContext?: string;
+  priceTarget?: number;
+  timeframe?: string;
+  wyckoffRegime?: string;
+  marketHeatScore?: number;
+  evPerDollar?: number;
+  qualityScore?: number;
+  qualityRationale?: string;
+  outcomePct?: number;
+  outcomeCorrect?: boolean | null;
+  generatedAt?: string;
+}
+
+export async function dbSaveSignal(s: SignalRow): Promise<void> {
+  await sql`
+    INSERT INTO card_signals (
+      card_id, player, card_hash, signal, confidence, summary,
+      price_trend, player_context, scarcity_note, market_context,
+      price_target, timeframe, wyckoff_regime, market_heat_score,
+      ev_per_dollar, quality_score, quality_rationale
+    ) VALUES (
+      ${s.cardId}, ${s.player}, ${s.cardHash}, ${s.signal}, ${s.confidence}, ${s.summary},
+      ${s.priceTrend ?? null}, ${s.playerContext ?? null}, ${s.scarcityNote ?? null}, ${s.marketContext ?? null},
+      ${s.priceTarget ?? null}, ${s.timeframe ?? null}, ${s.wyckoffRegime ?? null}, ${s.marketHeatScore ?? null},
+      ${s.evPerDollar ?? null}, ${s.qualityScore ?? null}, ${s.qualityRationale ?? null}
+    )
+  `;
+}
+
+export async function dbGetRecentSignals(cardHash: string, limit: number): Promise<SignalRow[]> {
+  const rows = await sql`
+    SELECT id, card_id, player, card_hash, signal, confidence, summary,
+           price_target, timeframe, wyckoff_regime, market_heat_score,
+           ev_per_dollar, quality_score, quality_rationale,
+           outcome_pct, outcome_correct, generated_at
+    FROM card_signals
+    WHERE card_hash = ${cardHash}
+    ORDER BY generated_at DESC
+    LIMIT ${limit}
+  `;
+  return rows.map((r) => ({
+    id:               r.id as number,
+    cardId:           r.card_id as string,
+    player:           r.player as string,
+    cardHash:         r.card_hash as string,
+    signal:           r.signal as 'BUY' | 'SELL' | 'HOLD',
+    confidence:       r.confidence as number,
+    summary:          r.summary as string,
+    priceTarget:      r.price_target != null ? parseFloat(r.price_target as string) : undefined,
+    timeframe:        r.timeframe as string | undefined,
+    wyckoffRegime:    r.wyckoff_regime as string | undefined,
+    marketHeatScore:  r.market_heat_score as number | undefined,
+    evPerDollar:      r.ev_per_dollar != null ? parseFloat(r.ev_per_dollar as string) : undefined,
+    qualityScore:     r.quality_score as number | undefined,
+    qualityRationale: r.quality_rationale as string | undefined,
+    outcomePct:       r.outcome_pct != null ? parseFloat(r.outcome_pct as string) : undefined,
+    outcomeCorrect:   r.outcome_correct as boolean | null | undefined,
+    generatedAt:      r.generated_at as string,
+  }));
+}
+
+export async function dbGetPendingOutcomes(minAgeDays: number, maxAgeDays: number): Promise<SignalRow[]> {
+  const rows = await sql`
+    SELECT id, card_id, player, card_hash, signal, confidence, summary,
+           price_target, wyckoff_regime, generated_at
+    FROM card_signals
+    WHERE outcome_checked_at IS NULL
+      AND price_target IS NOT NULL
+      AND generated_at < NOW() - (${minAgeDays} || ' days')::INTERVAL
+      AND generated_at > NOW() - (${maxAgeDays} || ' days')::INTERVAL
+    ORDER BY generated_at ASC
+    LIMIT 100
+  `;
+  return rows.map((r) => ({
+    id:          r.id as number,
+    cardId:      r.card_id as string,
+    player:      r.player as string,
+    cardHash:    r.card_hash as string,
+    signal:      r.signal as 'BUY' | 'SELL' | 'HOLD',
+    confidence:  r.confidence as number,
+    summary:     r.summary as string,
+    priceTarget: r.price_target != null ? parseFloat(r.price_target as string) : undefined,
+    generatedAt: r.generated_at as string,
+  }));
+}
+
+export async function dbRecordOutcome(
+  id: number,
+  outcomePrice: number,
+  outcomePct: number,
+  correct: boolean,
+): Promise<void> {
+  await sql`
+    UPDATE card_signals
+    SET outcome_price      = ${outcomePrice},
+        outcome_pct        = ${outcomePct},
+        outcome_correct    = ${correct},
+        outcome_checked_at = NOW()
+    WHERE id = ${id}
+  `;
+}
+
+export async function dbGetSignalWinRate(days: number): Promise<number | null> {
+  const rows = await sql`
+    SELECT COUNT(*) FILTER (WHERE outcome_correct = TRUE)  AS wins,
+           COUNT(*) FILTER (WHERE outcome_correct IS NOT NULL) AS total
+    FROM card_signals
+    WHERE generated_at > NOW() - (${days} || ' days')::INTERVAL
+  `;
+  const wins  = parseInt(rows[0].wins  as string, 10);
+  const total = parseInt(rows[0].total as string, 10);
+  if (total < 3) return null;
+  return (wins / total) * 100;
+}
+
+// ─── Market narratives ────────────────────────────────────────────────────────
+
+export interface NarrativeRow {
+  portfolioHash: string;
+  narrative: string;
+  themes: string[];
+  contradictions: string[];
+  topOpportunity?: string;
+  topRisk?: string;
+  regimeSummary?: string;
+  signalWinRate?: number;
+  computedAt?: string;
+}
+
+export async function dbUpsertNarrative(n: NarrativeRow): Promise<void> {
+  await sql`
+    INSERT INTO market_narratives (
+      portfolio_hash, narrative, themes, contradictions,
+      top_opportunity, top_risk, regime_summary, signal_win_rate, computed_at
+    ) VALUES (
+      ${n.portfolioHash}, ${n.narrative},
+      ${JSON.stringify(n.themes)}::jsonb, ${JSON.stringify(n.contradictions)}::jsonb,
+      ${n.topOpportunity ?? null}, ${n.topRisk ?? null},
+      ${n.regimeSummary ?? null}, ${n.signalWinRate ?? null},
+      NOW()
+    )
+    ON CONFLICT (portfolio_hash) DO UPDATE SET
+      narrative       = EXCLUDED.narrative,
+      themes          = EXCLUDED.themes,
+      contradictions  = EXCLUDED.contradictions,
+      top_opportunity = EXCLUDED.top_opportunity,
+      top_risk        = EXCLUDED.top_risk,
+      regime_summary  = EXCLUDED.regime_summary,
+      signal_win_rate = EXCLUDED.signal_win_rate,
+      computed_at     = NOW()
+  `;
+}
+
+export async function dbGetNarrative(portfolioHash: string): Promise<NarrativeRow | null> {
+  const rows = await sql`
+    SELECT portfolio_hash, narrative, themes, contradictions,
+           top_opportunity, top_risk, regime_summary, signal_win_rate, computed_at
+    FROM market_narratives
+    WHERE portfolio_hash = ${portfolioHash}
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    portfolioHash:  r.portfolio_hash as string,
+    narrative:      r.narrative as string,
+    themes:         r.themes as string[],
+    contradictions: r.contradictions as string[],
+    topOpportunity: r.top_opportunity as string | undefined,
+    topRisk:        r.top_risk as string | undefined,
+    regimeSummary:  r.regime_summary as string | undefined,
+    signalWinRate:  r.signal_win_rate != null ? parseFloat(r.signal_win_rate as string) : undefined,
+    computedAt:     r.computed_at as string,
+  };
 }
 
 // ─── Internal types ───────────────────────────────────────────────────────────

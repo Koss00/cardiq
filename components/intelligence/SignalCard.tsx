@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   TrendingUp, TrendingDown, Minus, Target, Clock, BarChart2, Star,
-  Layers, Activity, Newspaper, Info, ChevronDown, ChevronUp,
+  Layers, Activity, Newspaper, Info, ChevronDown, ChevronUp, Globe,
 } from 'lucide-react';
 import { CardSignal } from '@/types';
 import { formatCurrency } from '@/lib/utils';
@@ -43,10 +43,18 @@ const SIGNAL_CONFIG = {
 };
 
 const DIMENSIONS = [
-  { key: 'priceTrend'    as const, label: 'Price Trend',        icon: BarChart2, color: 'text-blue-400'   },
-  { key: 'playerContext' as const, label: 'Player Performance', icon: Star,      color: 'text-gold-400'   },
-  { key: 'scarcityNote'  as const, label: 'Scarcity & Grade',   icon: Layers,    color: 'text-purple-400' },
+  { key: 'priceTrend'    as const, label: 'Price Trend',        icon: BarChart2, color: 'text-blue-400',   bg: 'bg-blue-500/[0.07]'   },
+  { key: 'playerContext' as const, label: 'Player Performance', icon: Star,      color: 'text-gold-400',   bg: 'bg-[rgba(245,200,66,0.07)]'   },
+  { key: 'scarcityNote'  as const, label: 'Scarcity & Grade',   icon: Layers,    color: 'text-purple-400', bg: 'bg-purple-500/[0.07]' },
+  { key: 'marketContext' as const, label: 'Market Context',     icon: Globe,     color: 'text-blue-300',   bg: 'bg-blue-400/[0.07]'   },
 ];
+
+const WYCKOFF_STYLES: Record<string, { label: string; classes: string }> = {
+  ACCUMULATION: { label: 'ACCUMULATION', classes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
+  MARKUP:       { label: 'MARKUP',       classes: 'text-blue-400   bg-blue-500/10   border-blue-500/30'   },
+  DISTRIBUTION: { label: 'DISTRIBUTION', classes: 'text-amber-400  bg-amber-500/10  border-amber-500/30'  },
+  MARKDOWN:     { label: 'MARKDOWN',     classes: 'text-red-400    bg-red-500/10    border-red-500/30'    },
+};
 
 interface Props {
   signal: CardSignal;
@@ -62,7 +70,7 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
   const Icon = cfg.icon;
 
   const hasDetailedAnalysis =
-    streaming || Boolean(signal.priceTrend && signal.playerContext && signal.scarcityNote);
+    streaming || Boolean(signal.priceTrend || signal.playerContext || signal.scarcityNote || signal.marketContext);
   const hasNews         = signal.newsItems && signal.newsItems.length > 0;
   const hasPriceHistory = signal.priceHistory && signal.priceHistory.length >= 2;
   const hasFactors      = signal.confidenceFactors && signal.confidenceFactors.length > 0;
@@ -83,9 +91,21 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
             </div>
             <div className="min-w-0">
               <p className="font-display font-bold text-lg text-white truncate leading-tight">{signal.player}</p>
-              <span className={`inline-block text-[11px] tracking-widest px-3 py-0.5 rounded-sm mt-1 uppercase ${cfg.badge}`}>
-                {signal.signal}
-              </span>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span className={`text-[11px] tracking-widest px-3 py-0.5 rounded-sm uppercase ${cfg.badge}`}>
+                  {signal.signal}
+                </span>
+                {!streaming && signal.wyckoffRegime && WYCKOFF_STYLES[signal.wyckoffRegime] && (
+                  <span className={`text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm border ${WYCKOFF_STYLES[signal.wyckoffRegime].classes}`}>
+                    {WYCKOFF_STYLES[signal.wyckoffRegime].label}
+                  </span>
+                )}
+                {!streaming && signal.hasDrift && (
+                  <span className="text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm border text-amber-400 bg-amber-500/10 border-amber-500/30">
+                    Signal Changed
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -166,25 +186,30 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
         </div>
       )}
 
-      {/* ── Three-dimension analysis ─────────────────────────────────────────── */}
+      {/* ── Analysis dimensions ─────────────────────────────────────────────── */}
       {hasDetailedAnalysis ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[rgba(30,45,69,0.8)] bg-[#0A1628]/30">
-          {DIMENSIONS.map(({ key, label, icon: DimIcon, color }) => (
-            <div key={key} className="px-4 py-4">
-              <div className="flex items-center gap-1.5 mb-2">
-                <DimIcon size={10} className={color} />
-                <span className={`text-[9px] font-display font-semibold uppercase tracking-widest ${color}`}>
-                  {label}
-                </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(30,45,69,0.8)] bg-[#0A1628]/30">
+          {DIMENSIONS.map(({ key, label, icon: DimIcon, color, bg }) => {
+            const text = signal[key as keyof CardSignal] as string | undefined;
+            // Skip marketContext if empty and not streaming
+            if (key === 'marketContext' && !streaming && !text) return null;
+            return (
+              <div key={key} className={`px-4 py-4 ${bg}`}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <DimIcon size={10} className={color} />
+                  <span className={`text-[9px] font-display font-semibold uppercase tracking-widest ${color}`}>
+                    {label}
+                  </span>
+                </div>
+                <p className="text-chrome-400 text-xs leading-relaxed">
+                  {text || <span className="text-chrome-600 italic">Analyzing…</span>}
+                  {streaming && activeField === key && (
+                    <span className="inline-block w-px h-3 bg-gold-400 ml-0.5 animate-pulse align-middle" />
+                  )}
+                </p>
               </div>
-              <p className="text-chrome-400 text-xs leading-relaxed">
-                {signal[key] || <span className="text-chrome-600 italic">Analyzing…</span>}
-                {streaming && activeField === key && (
-                  <span className="inline-block w-px h-3 bg-gold-400 ml-0.5 animate-pulse align-middle" />
-                )}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : signal.reason ? (
         <div className="px-5 py-4 bg-[#0A1628]/30">
@@ -271,7 +296,7 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div className="px-5 py-3 border-t border-[rgba(30,45,69,0.8)] bg-navy-950/40 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {signal.priceTarget && (
             <div className="flex items-center gap-1.5 text-xs">
               <Target size={11} className="text-chrome-500" />
@@ -285,10 +310,28 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
               <span className="text-chrome-500 font-display uppercase tracking-widest">{signal.timeframe}</span>
             </div>
           )}
+          {!streaming && signal.evPerDollar !== undefined && (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-chrome-500 font-display font-black uppercase tracking-widest">EV:</span>
+              <span className={`font-display font-black ${signal.evPerDollar >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {signal.evPerDollar >= 0 ? '+' : ''}{(signal.evPerDollar * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
         </div>
-        <p className="text-xs text-chrome-700">
-          {new Date(signal.generatedAt).toLocaleString()}
-        </p>
+        <div className="flex items-center gap-3">
+          {!streaming && signal.qualityScore !== undefined && (
+            <span
+              className="text-[9px] font-display text-chrome-600 tabular-nums"
+              title={signal.qualityRationale ?? 'Data quality score'}
+            >
+              Q: {signal.qualityScore}/10
+            </span>
+          )}
+          <p className="text-xs text-chrome-700">
+            {new Date(signal.generatedAt).toLocaleString()}
+          </p>
+        </div>
       </div>
 
     </div>

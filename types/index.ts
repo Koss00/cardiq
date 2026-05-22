@@ -35,6 +35,8 @@ export interface PlayerStats {
   knownActive?: boolean;
 }
 
+export type WyckoffRegime = 'ACCUMULATION' | 'MARKUP' | 'DISTRIBUTION' | 'MARKDOWN';
+
 export interface CardSignal {
   cardId: string;
   player: string;
@@ -44,6 +46,7 @@ export interface CardSignal {
   priceTrend: string;
   playerContext: string;
   scarcityNote: string;
+  marketContext?: string;
   timeframe?: string;
   priceTarget?: number;
   generatedAt: string;
@@ -51,6 +54,13 @@ export interface CardSignal {
   newsItems?: string[];
   priceHistory?: PricePoint[];
   confidenceFactors?: ConfidenceFactor[];
+  // Phase 2 intelligence fields
+  wyckoffRegime?: WyckoffRegime;
+  marketHeatScore?: number;   // 0-100
+  evPerDollar?: number;       // e.g. 0.24 = +24% EV
+  qualityScore?: number;      // 1-10
+  qualityRationale?: string;
+  hasDrift?: boolean;         // true if signal changed vs. last stored
   // Legacy field
   reason?: string;
 }
@@ -114,6 +124,18 @@ export interface PortfolioMetrics {
   portfolioSharpe: number | null;
   portfolioMaxDrawdown: number | null;
   cards: CardMetrics[];
+  computedAt: string;
+}
+
+export interface MarketNarrative {
+  portfolioHash: string;
+  narrative: string;
+  themes: string[];
+  contradictions: string[];
+  topOpportunity?: string;
+  topRisk?: string;
+  regimeSummary?: string;
+  signalWinRate?: number;  // 0-100, undefined = insufficient history
   computedAt: string;
 }
 

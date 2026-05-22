@@ -1,0 +1,22 @@
+name: Nightly Outcome Check
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 3am EST (1h after price-refresh) daily
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run signal outcome check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.CARDIQ_URL }}/api/signals/outcome-check" \
+            -H "Authorization: Bearer ${{ secrets.PRICE_REFRESH_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Outcome check failed with status $STATUS"
+            exit 1
+          fi

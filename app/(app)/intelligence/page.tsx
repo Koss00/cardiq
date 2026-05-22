@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { Brain, RefreshCw, ScanLine, AlertCircle, BarChart2, Star, Layers } from 'lucide-react';
+import { Brain, RefreshCw, ScanLine, AlertCircle, BarChart2, Star, Layers, Globe } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import SignalCard from '@/components/intelligence/SignalCard';
 import SignalSkeleton from '@/components/intelligence/SignalSkeleton';
+import MarketNarrativePanel from '@/components/intelligence/MarketNarrativePanel';
 import { CardSignal, SignalType } from '@/types';
 import PortfolioRiskMetrics from '@/components/intelligence/PortfolioRiskMetrics';
 
@@ -35,6 +36,12 @@ const DIMENSIONS = [
     color: 'text-purple-400',
     bg: 'border-purple-500/20 bg-purple-500/[0.07]',
   },
+  {
+    icon: Globe,
+    label: 'Market Context',
+    color: 'text-blue-300',
+    bg: 'border-blue-400/20 bg-blue-400/[0.07]',
+  },
 ];
 
 interface StreamState {
@@ -46,13 +53,19 @@ interface StreamState {
   priceTrend?: string;
   playerContext?: string;
   scarcityNote?: string;
-  activeField?: 'priceTrend' | 'playerContext' | 'scarcityNote';
+  marketContext?: string;
+  wyckoffRegime?: string;
+  marketHeatScore?: number;
+  evPerDollar?: number;
+  qualityScore?: number;
+  qualityRationale?: string;
+  activeField?: 'priceTrend' | 'playerContext' | 'scarcityNote' | 'marketContext';
   phase: 'waiting' | 'verdict' | 'streaming';
 }
 
 type SSEEvent =
-  | { type: 'verdict'; signal: SignalType; confidence: number; summary: string; priceTarget?: number; timeframe?: string }
-  | { type: 'chunk'; field: 'priceTrend' | 'playerContext' | 'scarcityNote'; text: string }
+  | { type: 'verdict'; signal: SignalType; confidence: number; summary: string; priceTarget?: number; timeframe?: string; wyckoffRegime?: string; marketHeatScore?: number; evPerDollar?: number; qualityScore?: number; qualityRationale?: string }
+  | { type: 'chunk'; field: 'priceTrend' | 'playerContext' | 'scarcityNote' | 'marketContext'; text: string }
   | { type: 'done'; signal: CardSignal; fromCache?: boolean }
   | { type: 'error'; message: string };
 
@@ -82,7 +95,13 @@ export default function IntelligencePage() {
           setStreamMap((prev) => new Map(prev).set(cardId, {
             signal: event.signal, confidence: event.confidence,
             summary: event.summary, priceTarget: event.priceTarget,
-            timeframe: event.timeframe, phase: 'verdict',
+            timeframe: event.timeframe,
+            wyckoffRegime: event.wyckoffRegime,
+            marketHeatScore: event.marketHeatScore,
+            evPerDollar: event.evPerDollar,
+            qualityScore: event.qualityScore,
+            qualityRationale: event.qualityRationale,
+            phase: 'verdict',
           }));
           break;
         case 'chunk':
@@ -170,15 +189,21 @@ export default function IntelligencePage() {
   function streamToSignal(cardId: string, player: string, s: StreamState): CardSignal {
     return {
       cardId, player,
-      signal: s.signal ?? 'HOLD',
-      confidence: s.confidence ?? 0,
-      summary: s.summary ?? '',
-      priceTrend: s.priceTrend ?? '',
-      playerContext: s.playerContext ?? '',
-      scarcityNote: s.scarcityNote ?? '',
-      priceTarget: s.priceTarget,
-      timeframe: s.timeframe,
-      generatedAt: new Date().toISOString(),
+      signal:           s.signal ?? 'HOLD',
+      confidence:       s.confidence ?? 0,
+      summary:          s.summary ?? '',
+      priceTrend:       s.priceTrend ?? '',
+      playerContext:    s.playerContext ?? '',
+      scarcityNote:     s.scarcityNote ?? '',
+      marketContext:    s.marketContext ?? '',
+      priceTarget:      s.priceTarget,
+      timeframe:        s.timeframe,
+      wyckoffRegime:    s.wyckoffRegime as CardSignal['wyckoffRegime'],
+      marketHeatScore:  s.marketHeatScore,
+      evPerDollar:      s.evPerDollar,
+      qualityScore:     s.qualityScore,
+      qualityRationale: s.qualityRationale,
+      generatedAt:      new Date().toISOString(),
     };
   }
 
@@ -310,6 +335,9 @@ export default function IntelligencePage() {
       {/* ── Completed view ───────────────────────────────────────────── */}
       {!isGenerating && signals.length > 0 && (
         <>
+          {/* Market narrative synthesis */}
+          <MarketNarrativePanel signals={signals} />
+
           {/* Signal summary row */}
           <div className="grid grid-cols-3 gap-4">
             {(['BUY', 'SELL', 'HOLD'] as SignalType[]).map((type) => {

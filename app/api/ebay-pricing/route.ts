@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
           url:       item.itemWebUrl as string,
           condition: item.condition as string | undefined,
           imageUrl,
+          listedAt:  item.itemCreationDate as string | undefined,
         };
       })
       .filter((l) => l.price > 0)
