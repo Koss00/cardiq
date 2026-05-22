@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { getClientIp, validateCertNumber } from '@/lib/security';
 
 const CACHE_DIR = path.join(process.cwd(), '.cache');
 const PSA_FILE  = path.join(CACHE_DIR, 'psa-certs.json');
@@ -33,8 +35,16 @@ function writeCache(cache: Record<string, PsaEntry>) {
 }
 
 export async function GET(req: NextRequest) {
-  const cert = new URL(req.url).searchParams.get('cert')?.trim();
-  if (!cert) return NextResponse.json({ error: 'cert parameter required' }, { status: 400 });
+  const ip = getClientIp(req);
+  const rl = checkRateLimit(ip, 'psa-pop', 20);
+  if (!rl.allowed) return rateLimitResponse(rl.resetIn);
+
+  const rawCert = new URL(req.url).searchParams.get('cert')?.trim();
+  const certResult = validateCertNumber(rawCert);
+  if (!certResult.ok) {
+    return NextResponse.json({ error: certResult.error }, { status: 400 });
+  }
+  const cert = certResult.value;
 
   const cache = readCache();
   const hit   = cache[cert];
@@ -52,7 +62,7 @@ export async function GET(req: NextRequest) {
       console.warn(`[psa-pop] HTTP ${res.status} for cert ${cert}`);
       cache[cert] = { data: null, cachedAt: new Date().toISOString() };
       writeCache(cache);
-      return NextResponse.json({ data: null, error: `PSA returned ${res.status}` });
+      return NextResponse.json({ data: null, error: 'PSA lookup failed.' });
     }
 
     const raw = await res.json() as Record<string, unknown>;
@@ -80,7 +90,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
 
   } catch (err) {
-    console.error('[psa-pop] fetch failed:', err);
-    return NextResponse.json({ data: null, error: 'PSA API unavailable' });
+    console.error('[psa-pop] fetch failed:', err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ data: null, error: 'PSA API unavailable.' });
   }
 }

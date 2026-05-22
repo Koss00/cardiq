@@ -23,7 +23,7 @@ function MiniCard({ card }: { card: Card }) {
   const initials = (firstName ? firstName[0] : '') + lastName[0];
   const bg = SPORT_BG[card.sport] ?? SPORT_BG.Baseball;
   return (
-    <div className="w-9 h-[52px] rounded-sm overflow-hidden flex-shrink-0 border border-[rgba(0,212,255,0.15)] shadow-[0_0_0_1px_rgba(123,47,255,0.1)]" style={{ background: bg }}>
+    <div className="w-9 h-[52px] rounded-sm overflow-hidden flex-shrink-0 border border-[#1E2D45]" style={{ background: bg }}>
       <div className="w-full h-full flex flex-col items-center justify-end pb-1 relative">
         <span className="absolute top-1 left-1 right-1 text-[5px] font-display font-black text-white/40 uppercase tracking-widest truncate leading-none">{card.year}</span>
         <span className="font-card text-white leading-none" style={{ fontSize: '1.1rem' }}>{initials}</span>
@@ -76,7 +76,7 @@ export default function CardRow({ card, signal }: Props) {
   }
 
   return (
-    <tr className="border-b border-[rgba(0,212,255,0.06)] hover:bg-navy-700/50 transition-colors">
+    <tr className="border-b border-[#1E2D45] hover:bg-[#111D33]/80 transition-colors">
       {/* Card info */}
       <td className="py-3 px-4">
         <div className="flex items-center gap-3">
@@ -88,8 +88,8 @@ export default function CardRow({ card, signal }: Props) {
               href={`/portfolio/${card.id}`}
               className="group flex items-center gap-1.5"
             >
-              <p className="font-card text-base text-white uppercase tracking-wide leading-tight group-hover:text-electric transition-colors">{card.player}</p>
-              <ExternalLink size={10} className="text-chrome-700 group-hover:text-electric transition-colors flex-shrink-0" />
+              <p className="font-display font-semibold text-base text-white leading-tight group-hover:text-gold-400 transition-colors">{card.player}</p>
+              <ExternalLink size={10} className="text-chrome-700 group-hover:text-gold-400 transition-colors flex-shrink-0" />
             </Link>
             <p className="text-chrome-500 text-xs mt-0.5 font-display">
               {card.year} {card.brand}
@@ -109,7 +109,7 @@ export default function CardRow({ card, signal }: Props) {
 
       {/* Condition */}
       <td className="py-3.5 px-4">
-        <span className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-300 bg-navy-700 border border-[rgba(0,212,255,0.1)] px-2 py-1 rounded-sm">{card.condition}</span>
+        <span className="text-[10px] font-display font-semibold uppercase tracking-widest text-chrome-300 bg-[#111D33] border border-[#1E2D45] px-2 py-1 rounded-md">{card.condition}</span>
       </td>
 
       {/* Purchase Price */}
@@ -151,7 +151,7 @@ export default function CardRow({ card, signal }: Props) {
             onClick={refreshPrice}
             disabled={refreshing}
             title="Refresh eBay price"
-            className="w-7 h-7 flex items-center justify-center rounded-sm bg-navy-700 border border-[rgba(0,212,255,0.1)] hover:border-[rgba(0,212,255,0.3)] text-chrome-400 hover:text-electric transition-colors disabled:opacity-50"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#111D33] border border-[#1E2D45] hover:border-[rgba(0,212,170,0.3)] text-chrome-400 hover:text-electric transition-colors disabled:opacity-50 cursor-pointer"
           >
             {refreshing ? (
               <Loader2 size={12} className="animate-spin" />
@@ -162,7 +162,7 @@ export default function CardRow({ card, signal }: Props) {
           <button
             onClick={() => dispatch({ type: 'REMOVE_CARD', id: card.id })}
             title="Remove card"
-            className="w-7 h-7 flex items-center justify-center rounded-sm bg-navy-700 border border-[rgba(255,51,102,0.1)] hover:border-[rgba(255,51,102,0.35)] text-chrome-400 hover:text-prizm-red transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#111D33] border border-[rgba(255,77,77,0.15)] hover:border-[rgba(255,77,77,0.4)] text-chrome-400 hover:text-red-400 transition-colors cursor-pointer"
           >
             <Trash2 size={12} />
           </button>

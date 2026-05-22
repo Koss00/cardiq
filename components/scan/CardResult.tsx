@@ -11,6 +11,7 @@ interface Props {
   soldListings: EbayListing[];
   soldLoading: boolean;
   soldFromCache: boolean;
+  soldSource?: 'sold' | 'browse';
   soldError?: string;
   activeListings: EbayListing[];
   activeLoading: boolean;
@@ -26,6 +27,7 @@ export default function CardResult({
   soldListings,
   soldLoading,
   soldFromCache,
+  soldSource = 'browse',
   soldError,
   activeListings,
   activeLoading,
@@ -44,10 +46,11 @@ export default function CardResult({
     return () => clearTimeout(t);
   }, []);
 
-  const listings  = tab === 'sold' ? soldListings : activeListings;
-  const loading   = tab === 'sold' ? soldLoading  : activeLoading;
-  const error     = tab === 'sold' ? soldError    : activeError;
-  const isCached  = tab === 'sold' ? soldFromCache : activeFromCache;
+  const effectiveTab = soldSource !== 'sold' ? 'active' : tab;
+  const listings  = effectiveTab === 'sold' ? soldListings : activeListings;
+  const loading   = effectiveTab === 'sold' ? soldLoading  : activeLoading;
+  const error     = effectiveTab === 'sold' ? soldError    : activeError;
+  const isCached  = effectiveTab === 'sold' ? soldFromCache : activeFromCache;
 
   return (
     <div ref={containerRef} className="space-y-4">
@@ -93,18 +96,18 @@ export default function CardResult({
         </div>
 
         <div className="grid grid-cols-3 gap-3 text-sm">
-          <div className="bg-navy-700 border border-[rgba(245,200,66,0.1)] rounded-sm p-3">
-            <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Sport</p>
-            <p className="text-white font-semibold">{card.sport}</p>
+          <div className="bg-[#111D33] border border-[#1E2D45] rounded-md p-3">
+            <p className="text-muted text-[10px] font-display font-semibold uppercase tracking-widest mb-1">Sport</p>
+            <p className="text-white font-display font-semibold">{card.sport}</p>
           </div>
-          <div className="bg-navy-700 border border-[rgba(245,200,66,0.1)] rounded-sm p-3">
-            <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Est. Condition</p>
-            <p className="text-white font-semibold">{card.condition}</p>
+          <div className="bg-[#111D33] border border-[#1E2D45] rounded-md p-3">
+            <p className="text-muted text-[10px] font-display font-semibold uppercase tracking-widest mb-1">Est. Condition</p>
+            <p className="text-white font-display font-semibold">{card.condition}</p>
           </div>
           {avgPrice !== null && (
-            <div className="foil bg-navy-700 border border-[rgba(245,200,66,0.25)] rounded-sm p-3">
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Avg Sold Price</p>
-              <p className="text-gold-400 font-black font-display text-lg">{formatCurrency(avgPrice)}</p>
+            <div className="foil bg-[#111D33] border border-[rgba(245,200,66,0.3)] rounded-md p-3">
+              <p className="text-muted text-[10px] font-display font-semibold uppercase tracking-widest mb-1">Avg Sold Price</p>
+              <p className="text-gold-400 font-black font-display text-xl">{formatCurrency(avgPrice)}</p>
             </div>
           )}
         </div>
@@ -118,23 +121,25 @@ export default function CardResult({
       <div className="chrome-panel p-5">
         {/* Tab header */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex gap-1 bg-navy-800 rounded-sm p-0.5">
-            <button
-              onClick={() => setTab('sold')}
-              className={`px-3 py-1.5 rounded-sm text-[11px] font-display font-black uppercase tracking-widest transition-all ${
-                tab === 'sold'
-                  ? 'bg-electric text-navy-900'
-                  : 'text-chrome-400 hover:text-white'
-              }`}
-            >
-              Market Prices
-            </button>
+          <div className="flex gap-1 bg-[#0A1628] border border-[#1E2D45] rounded-md p-0.5">
+            {soldSource === 'sold' && (
+              <button
+                onClick={() => setTab('sold')}
+                className={`px-3 py-1.5 rounded-sm text-[11px] font-display font-semibold uppercase tracking-widest transition-all cursor-pointer ${
+                  tab === 'sold'
+                    ? 'bg-gold-400 text-[#060E1C] font-black'
+                    : 'text-muted hover:text-white'
+                }`}
+              >
+                Sold Comps
+              </button>
+            )}
             <button
               onClick={() => setTab('active')}
-              className={`px-3 py-1.5 rounded-sm text-[11px] font-display font-black uppercase tracking-widest transition-all ${
-                tab === 'active'
-                  ? 'bg-electric text-navy-900'
-                  : 'text-chrome-400 hover:text-white'
+              className={`px-3 py-1.5 rounded-sm text-[11px] font-display font-semibold uppercase tracking-widest transition-all cursor-pointer ${
+                tab === 'active' || soldSource !== 'sold'
+                  ? 'bg-gold-400 text-[#060E1C] font-black'
+                  : 'text-muted hover:text-white'
               }`}
             >
               Active Listings
@@ -154,15 +159,19 @@ export default function CardResult({
           </div>
         </div>
 
-        {/* Tab description */}
-        <p className="text-chrome-600 text-[10px] font-display uppercase tracking-widest mb-3">
-          {tab === 'sold'
-            ? 'Based on recent eBay market data'
+        <p className="text-muted text-[10px] font-display font-medium uppercase tracking-widest mb-3">
+          {effectiveTab === 'sold'
+            ? 'Completed eBay sales — actual transaction prices'
             : 'Active fixed-price listings — what sellers are asking now'}
         </p>
+        {soldSource !== 'sold' && (
+          <p className="text-[10px] text-amber-500/70 font-display mb-3">
+            Sold comps temporarily unavailable — eBay API limit reached
+          </p>
+        )}
 
         {error && (
-          <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-500/10 border border-amber-500/20 rounded-sm p-3">
+          <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-500/10 border border-amber-500/20 rounded-md p-3">
             <AlertCircle size={14} />
             {error}
           </div>
@@ -177,17 +186,17 @@ export default function CardResult({
             {listings.map((listing, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 py-2 border-b border-[rgba(0,212,255,0.06)] last:border-0"
+                className="flex items-center gap-3 py-2.5 border-b border-[#1E2D45] last:border-0"
               >
                 {listing.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={listing.imageUrl}
                     alt={listing.title}
-                    className="w-10 h-14 object-cover rounded-sm border border-[rgba(0,212,255,0.12)] flex-shrink-0 bg-navy-700"
+                    className="w-10 h-14 object-cover rounded-md border border-[#1E2D45] flex-shrink-0 bg-[#111D33]"
                   />
                 ) : (
-                  <div className="w-10 h-14 rounded-sm border border-[rgba(0,212,255,0.08)] bg-navy-700 flex-shrink-0" />
+                  <div className="w-10 h-14 rounded-md border border-[#1E2D45] bg-[#111D33] flex-shrink-0" />
                 )}
 
                 <p className="text-chrome-300 text-xs line-clamp-2 flex-1 font-display leading-snug">{listing.title}</p>
@@ -196,14 +205,14 @@ export default function CardResult({
                   <span className="text-white font-display font-black text-sm">
                     {formatCurrency(listing.price)}
                   </span>
-                  <span className={`text-[10px] font-display font-black uppercase ${tab === 'sold' ? 'text-electric' : 'text-emerald-500'}`}>
-                    {tab === 'sold' ? 'Market' : 'Live'}
+                  <span className={`text-[10px] font-display font-semibold uppercase ${tab === 'sold' ? 'text-gold-400' : 'text-electric'}`}>
+                    {tab === 'sold' ? (listing.soldDate ?? 'Sold') : 'Live'}
                   </span>
                   <a
                     href={listing.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-chrome-600 hover:text-electric transition-colors"
+                    className="text-chrome-600 hover:text-gold-400 transition-colors"
                   >
                     <ExternalLink size={13} />
                   </a>

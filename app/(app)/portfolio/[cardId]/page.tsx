@@ -32,7 +32,7 @@ const GRADE_STYLES: Record<string, string> = {
 const ACTION_BTN = 'flex items-center gap-1.5 px-4 py-2 rounded-md border text-[10px] font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer';
 
 const INPUT_BASE =
-  'w-full bg-[#0A1628] border border-[rgba(192,200,216,0.14)] rounded-md px-3 py-2.5 text-sm font-sans text-white focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric/30 transition-all duration-200';
+  'w-full bg-[#111D33] border border-[#1E2D45] rounded-md px-3 py-2.5 text-sm font-sans text-white focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/20 transition-all duration-200';
 
 export default function CardDetailPage() {
   const { cardId } = useParams<{ cardId: string }>();
@@ -240,8 +240,8 @@ export default function CardDetailPage() {
             {/* Title row */}
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 className="font-card text-4xl text-white uppercase tracking-wide leading-tight">
-                  {card.player}
+                <h1 className="font-card text-4xl uppercase tracking-wide leading-tight">
+                  <span className="title-gold">{card.player}</span>
                 </h1>
                 <p className="text-slate-500 text-sm font-sans mt-1.5">
                   {card.year} · {card.brand}
@@ -254,7 +254,7 @@ export default function CardDetailPage() {
                 )}
               </div>
               {grader && grade && (
-                <div className={`flex-shrink-0 px-4 py-2.5 rounded-md text-center ${GRADE_STYLES[grader] ?? 'bg-[#0D1A30] text-chrome-300 border border-chrome-700'}`}>
+                <div className={`flex-shrink-0 px-4 py-2.5 rounded-md text-center ${GRADE_STYLES[grader] ?? 'bg-[#111D33] text-chrome-300 border border-chrome-700'}`}>
                   <p className="text-[8px] font-display font-black uppercase tracking-widest opacity-60 mb-0.5">{grader}</p>
                   <p className="text-2xl font-display font-black leading-tight tabular-nums">{grade}</p>
                 </div>
@@ -272,7 +272,7 @@ export default function CardDetailPage() {
                   key={label}
                   className={`rounded-md px-4 py-3.5 text-center ${
                     highlight
-                      ? 'bg-[#0A1628] border border-[rgba(0,212,255,0.18)] shadow-electric/5'
+                      ? 'bg-[#111D33] border border-[rgba(0,212,170,0.2)] shadow-electric/5'
                       : 'bg-[#0A1628] border border-[rgba(192,200,216,0.08)]'
                   }`}
                 >
@@ -309,12 +309,12 @@ export default function CardDetailPage() {
                     onKeyDown={(e) => e.key === 'Enter' && lookupPsa()}
                     placeholder="Enter cert number…"
                     aria-label="PSA cert number"
-                    className="flex-1 bg-[#0A1628] border border-[rgba(192,200,216,0.12)] rounded-md px-3 py-2 text-xs font-sans text-chrome-300 placeholder:text-chrome-700 focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric/25 transition-all duration-200"
+                    className="flex-1 bg-[#111D33] border border-[#1E2D45] rounded-md px-3 py-2 text-xs font-sans text-chrome-300 placeholder:text-chrome-700 focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/20 transition-all duration-200"
                   />
                   <button
                     onClick={lookupPsa}
                     disabled={!certInput.trim() || psaLoading}
-                    className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.14)] text-chrome-400 hover:text-electric disabled:opacity-40`}
+                    className={`${ACTION_BTN} bg-[#111D33] border-[rgba(192,200,216,0.14)] text-chrome-400 hover:text-electric disabled:opacity-40`}
                   >
                     {psaLoading ? <Loader2 size={10} className="animate-spin" /> : <ShieldCheck size={10} />}
                     Verify
@@ -333,20 +333,20 @@ export default function CardDetailPage() {
               <button
                 onClick={refreshPrice}
                 disabled={refreshing}
-                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-electric disabled:opacity-40`}
+                className={`${ACTION_BTN} bg-[#111D33] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-electric disabled:opacity-40`}
               >
                 {refreshing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
                 Refresh Price
               </button>
               <button
                 onClick={openEdit}
-                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-white`}
+                className={`${ACTION_BTN} bg-[#111D33] border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-white`}
               >
                 <Edit2 size={11} />Edit Values
               </button>
               <button
                 onClick={() => setShowRemove(true)}
-                className={`${ACTION_BTN} bg-[#0D1A30] border-[rgba(255,51,102,0.12)] text-chrome-500 hover:text-red-400 hover:border-red-500/25`}
+                className={`${ACTION_BTN} bg-[#111D33] border-[rgba(255,51,102,0.12)] text-chrome-500 hover:text-red-400 hover:border-red-500/25`}
               >
                 <Trash2 size={11} />Remove
               </button>
@@ -416,7 +416,7 @@ export default function CardDetailPage() {
       {/* ── Edit modal ──────────────────────────────────────────────── */}
       {showEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#060E1C]/90 backdrop-blur-md">
-          <div className="chrome-panel w-full max-w-sm p-7 space-y-6 border border-[rgba(0,212,255,0.14)]">
+          <div className="chrome-panel w-full max-w-sm p-7 space-y-6 border border-[#1E2D45]">
             <div className="flex items-center justify-between">
               <h2 className="font-card text-xl text-white uppercase tracking-wide">Edit Values</h2>
               <button
@@ -449,7 +449,7 @@ export default function CardDetailPage() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowEdit(false)}
-                className="flex-1 py-2.5 rounded-md bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
+                className="flex-1 py-2.5 rounded-md bg-[#111D33] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
               >
                 Cancel
               </button>
@@ -477,7 +477,7 @@ export default function CardDetailPage() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowRemove(false)}
-                className="flex-1 py-2.5 rounded-md bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
+                className="flex-1 py-2.5 rounded-md bg-[#111D33] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
               >
                 Cancel
               </button>

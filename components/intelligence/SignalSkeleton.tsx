@@ -1,8 +1,8 @@
 export default function SignalSkeleton({ player }: { player: string }) {
   return (
-    <div className="border border-[rgba(245,200,66,0.08)] rounded-sm overflow-hidden bg-navy-800">
+    <div className="border border-[#1E2D45] rounded-md overflow-hidden bg-[#111D33]">
       {/* Header */}
-      <div className="bg-navy-700/50 px-5 py-4 flex items-start justify-between gap-4">
+      <div className="bg-[#0A1628]/60 px-5 py-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-sm skeleton flex-shrink-0" />
           <div className="min-w-0">

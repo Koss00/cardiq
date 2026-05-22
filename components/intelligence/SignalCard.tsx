@@ -11,28 +11,31 @@ import PriceSparkline from './PriceSparkline';
 
 const SIGNAL_CONFIG = {
   BUY: {
-    border: 'border-emerald-500/30',
-    headerBg: 'bg-emerald-500/10',
-    badge: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-    bar: 'bg-emerald-500',
+    border: 'border-emerald-500/40',
+    headerBg: 'bg-emerald-950/60',
+    badge: 'bg-emerald-500 text-[#060E1C] font-black',
+    iconBox: 'bg-emerald-500/20 border border-emerald-500/40',
+    bar: 'from-emerald-600 to-emerald-400',
     label: 'text-emerald-400',
     icon: TrendingUp,
     iconColor: 'text-emerald-400',
   },
   SELL: {
-    border: 'border-red-500/30',
-    headerBg: 'bg-red-500/10',
-    badge: 'bg-red-500/20 text-red-300 border border-red-500/30',
-    bar: 'bg-red-500',
+    border: 'border-red-500/40',
+    headerBg: 'bg-red-950/60',
+    badge: 'bg-red-500 text-white font-black',
+    iconBox: 'bg-red-500/20 border border-red-500/40',
+    bar: 'from-red-600 to-red-400',
     label: 'text-red-400',
     icon: TrendingDown,
     iconColor: 'text-red-400',
   },
   HOLD: {
-    border: 'border-amber-500/30',
-    headerBg: 'bg-amber-500/10',
-    badge: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-    bar: 'bg-amber-500',
+    border: 'border-amber-500/40',
+    headerBg: 'bg-amber-950/60',
+    badge: 'bg-amber-500 text-[#060E1C] font-black',
+    iconBox: 'bg-amber-500/20 border border-amber-500/40',
+    bar: 'from-amber-600 to-amber-400',
     label: 'text-amber-400',
     icon: Minus,
     iconColor: 'text-amber-400',
@@ -65,18 +68,22 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
   const hasFactors      = signal.confidenceFactors && signal.confidenceFactors.length > 0;
 
   return (
-    <div className={`holo-shimmer chrome-panel overflow-hidden border ${cfg.border}`}>
+    <div className={`holo-shimmer chrome-panel overflow-hidden border ${cfg.border} ${
+      signal.signal === 'BUY' ? 'signal-buy-glow' :
+      signal.signal === 'SELL' ? 'signal-sell-glow' :
+      'signal-hold-glow'
+    }`}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className={`${cfg.headerBg} px-5 py-4 border-b border-[rgba(0,212,255,0.06)]`}>
+      <div className={`${cfg.headerBg} px-5 py-4 border-b border-[rgba(30,45,69,0.8)]`}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0 ${cfg.badge}`}>
-              <Icon size={17} className={cfg.iconColor} />
+            <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${cfg.iconBox}`}>
+              <Icon size={18} className={cfg.iconColor} />
             </div>
             <div className="min-w-0">
-              <p className="font-card text-xl text-white truncate tracking-wide uppercase leading-tight">{signal.player}</p>
-              <span className={`inline-block text-[10px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm mt-0.5 ${cfg.badge}`}>
+              <p className="font-display font-bold text-lg text-white truncate leading-tight">{signal.player}</p>
+              <span className={`inline-block text-[11px] tracking-widest px-3 py-0.5 rounded-sm mt-1 uppercase ${cfg.badge}`}>
                 {signal.signal}
               </span>
             </div>
@@ -84,8 +91,8 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
 
           {/* Confidence meter + breakdown toggle */}
           <div className="text-right flex-shrink-0">
-            <div className="flex items-center justify-end gap-1.5 mb-1">
-              <p className="text-[10px] font-display font-black text-chrome-500 uppercase tracking-widest">Confidence</p>
+            <div className="flex items-center justify-end gap-1.5 mb-2">
+              <p className="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Confidence</p>
               {hasFactors && (
                 <button
                   onClick={() => setShowConfidence((v) => !v)}
@@ -97,20 +104,20 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
               )}
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-20 h-1.5 bg-navy-700 rounded-full overflow-hidden">
+              <div className="w-24 h-2 bg-navy-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${cfg.bar}`}
+                  className={`h-full rounded-full transition-all bg-gradient-to-r ${cfg.bar}`}
                   style={{ width: `${signal.confidence}%` }}
                 />
               </div>
-              <span className={`text-xs font-display font-black w-8 text-right ${cfg.label}`}>{signal.confidence}%</span>
+              <span className={`text-sm font-display font-black w-9 text-right ${cfg.label}`}>{signal.confidence}%</span>
             </div>
           </div>
         </div>
 
         {/* Confidence breakdown — expandable */}
         {showConfidence && hasFactors && (
-          <div className="mt-3 pt-3 border-t border-[rgba(0,212,255,0.08)] grid grid-cols-2 gap-2">
+          <div className="mt-3 pt-3 border-t border-[#1E2D45] grid grid-cols-2 gap-2">
             {signal.confidenceFactors!.map((f) => (
               <div key={f.label} className="bg-navy-900/60 rounded-sm px-3 py-2">
                 <div className="flex items-center justify-between mb-1">
@@ -139,17 +146,17 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
       </div>
 
       {/* ── Summary ─────────────────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-b border-[rgba(0,212,255,0.06)] bg-navy-900/40">
-        <p className="text-chrome-200 text-sm font-semibold leading-relaxed">
+      <div className="px-5 py-4 border-b border-[rgba(30,45,69,0.8)] bg-navy-900/40">
+        <p className="text-chrome-200 text-sm leading-relaxed">
           {signal.summary ?? signal.reason}
         </p>
       </div>
 
       {/* ── Price sparkline ─────────────────────────────────────────────────── */}
       {hasPriceHistory && (
-        <div className="px-5 py-2.5 border-b border-[rgba(0,212,255,0.06)] bg-[rgba(0,212,255,0.02)]">
+        <div className="px-5 py-2.5 border-b border-[rgba(30,45,69,0.8)] bg-[rgba(0,212,170,0.02)]">
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[9px] font-display font-black uppercase tracking-widest text-blue-400">Price History</span>
+            <span className="text-[9px] font-display font-semibold uppercase tracking-widest text-muted">Price History</span>
           </div>
           <PriceSparkline
             points={signal.priceHistory!}
@@ -161,12 +168,12 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
 
       {/* ── Three-dimension analysis ─────────────────────────────────────────── */}
       {hasDetailedAnalysis ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,212,255,0.06)] bg-navy-900/20">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[rgba(30,45,69,0.8)] bg-[#0A1628]/30">
           {DIMENSIONS.map(({ key, label, icon: DimIcon, color }) => (
             <div key={key} className="px-4 py-4">
               <div className="flex items-center gap-1.5 mb-2">
-                <DimIcon size={11} className={color} />
-                <span className={`text-[9px] font-display font-black uppercase tracking-widest ${color}`}>
+                <DimIcon size={10} className={color} />
+                <span className={`text-[9px] font-display font-semibold uppercase tracking-widest ${color}`}>
                   {label}
                 </span>
               </div>
@@ -180,21 +187,21 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
           ))}
         </div>
       ) : signal.reason ? (
-        <div className="px-5 py-4 bg-navy-900/20">
+        <div className="px-5 py-4 bg-[#0A1628]/30">
           <p className="text-chrome-400 text-sm leading-relaxed">{signal.reason}</p>
         </div>
       ) : null}
 
       {/* ── Live stats strip ─────────────────────────────────────────────────── */}
       {!streaming && (
-        <div className="px-5 py-3 border-t border-[rgba(0,212,255,0.06)] bg-[rgba(0,212,255,0.02)]">
+        <div className="px-5 py-3 border-t border-[rgba(30,45,69,0.8)] bg-[rgba(0,212,170,0.02)]">
           <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-            <span className="flex items-center gap-1 bg-electric/20 text-electric border border-electric/40 text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm">
+            <span className="flex items-center gap-1 bg-[rgba(0,212,170,0.12)] text-electric border border-[rgba(0,212,170,0.3)] text-[9px] font-display font-semibold uppercase tracking-widest px-2.5 py-1 rounded-md">
               <Activity size={8} />
               {signal.playerStats?.isRetired && !signal.playerStats?.knownActive ? 'Career Stats' : 'Live Stats'}
             </span>
             {signal.playerStats && (
-              <span className="text-[10px] text-chrome-600 font-display">
+              <span className="text-[10px] text-muted font-display">
                 {signal.playerStats.season}
                 {signal.playerStats.source && ` · ${signal.playerStats.source}`}
                 {signal.playerStats.team && ` · ${signal.playerStats.team}`}
@@ -207,40 +214,40 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
               {signal.playerStats.stats.map((s) => (
                 <div
                   key={s.label}
-                  className="flex items-baseline gap-1 bg-navy-800 border border-[rgba(0,212,255,0.12)] rounded-sm px-2.5 py-1"
+                  className="flex items-baseline gap-1.5 bg-[#111D33] border border-[#1E2D45] rounded-md px-3 py-1.5"
                 >
-                  <span className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-500">{s.label}</span>
-                  <span className="text-[12px] font-display font-black text-white">{s.value}</span>
+                  <span className="text-[9px] font-display font-semibold uppercase tracking-widest text-muted">{s.label}</span>
+                  <span className="text-[13px] font-display font-black text-white">{s.value}</span>
                 </div>
               ))}
               {signal.playerStats.injuryStatus && (
-                <div className="flex items-baseline gap-1 bg-red-500/10 border border-red-500/25 rounded-sm px-2.5 py-1">
-                  <span className="text-[9px] font-display font-black uppercase tracking-widest text-red-400">Status</span>
-                  <span className="text-[12px] font-display font-black text-red-300">{signal.playerStats.injuryStatus}</span>
+                <div className="flex items-baseline gap-1.5 bg-red-500/10 border border-red-500/25 rounded-md px-3 py-1.5">
+                  <span className="text-[9px] font-display font-semibold uppercase tracking-widest text-red-400">Status</span>
+                  <span className="text-[13px] font-display font-black text-red-300">{signal.playerStats.injuryStatus}</span>
                 </div>
               )}
             </div>
           ) : signal.playerStats?.knownActive ? (
-            <p className="text-chrome-600 text-[11px] font-display italic">Active player — live stats temporarily unavailable</p>
+            <p className="text-muted text-[11px] font-display italic">Active player — live stats temporarily unavailable</p>
           ) : (
-            <p className="text-chrome-600 text-[11px] font-display italic">Historical player — using market data only</p>
+            <p className="text-muted text-[11px] font-display italic">Historical player — using market data only</p>
           )}
         </div>
       )}
 
       {/* ── Recent news ─────────────────────────────────────────────────────── */}
       {hasNews && !streaming && (
-        <div className="border-t border-[rgba(0,212,255,0.06)]">
+        <div className="border-t border-[rgba(30,45,69,0.8)]">
           <button
             onClick={() => setShowNews((v) => !v)}
-            className="w-full flex items-center justify-between px-5 py-2.5 hover:bg-navy-900/30 transition-colors"
+            className="w-full flex items-center justify-between px-5 py-2.5 hover:bg-navy-900/20 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-2">
-              <Newspaper size={11} className="text-chrome-500" />
-              <span className="text-[9px] font-display font-black uppercase tracking-widest text-chrome-500">
+              <Newspaper size={11} className="text-muted" />
+              <span className="text-[9px] font-display font-semibold uppercase tracking-widest text-muted">
                 Recent News
               </span>
-              <span className="text-[9px] font-display text-chrome-600 bg-navy-700 px-1.5 py-0.5 rounded-sm">
+              <span className="text-[9px] font-display text-chrome-600 bg-[#1E2D45] px-1.5 py-0.5 rounded">
                 {signal.newsItems!.length}
               </span>
             </div>
@@ -250,10 +257,10 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
             }
           </button>
           {showNews && (
-            <div className="px-5 pb-3 space-y-2 bg-navy-900/20">
+            <div className="px-5 pb-3 space-y-2 bg-[#0A1628]/30">
               {signal.newsItems!.map((headline, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <span className="text-[9px] font-display font-black text-chrome-600 mt-0.5 flex-shrink-0">{i + 1}.</span>
+                  <span className="text-[9px] font-display font-semibold text-chrome-600 mt-0.5 flex-shrink-0">{i + 1}.</span>
                   <p className="text-chrome-400 text-[11px] font-display leading-snug">{headline}</p>
                 </div>
               ))}
@@ -263,7 +270,7 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
       )}
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-t border-[rgba(0,212,255,0.06)] bg-navy-950/40 flex items-center justify-between gap-4 flex-wrap">
+      <div className="px-5 py-3 border-t border-[rgba(30,45,69,0.8)] bg-navy-950/40 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           {signal.priceTarget && (
             <div className="flex items-center gap-1.5 text-xs">

@@ -1,0 +1,17 @@
+name: Nightly Price Refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 2am EST / 11pm PST daily
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger price refresh
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.CARDIQ_URL }}/api/price-refresh" \
+            -H "Authorization: Bearer ${{ secrets.PRICE_REFRESH_SECRET }}" \
+            -H "Content-Type: application/json"

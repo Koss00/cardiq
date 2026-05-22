@@ -8,9 +8,9 @@ import { SAMPLE_CARDS } from '@/lib/sample-data';
 import { SignalType } from '@/types';
 
 const SIGNAL_STYLES: Record<SignalType, string> = {
-  BUY:  'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25',
-  SELL: 'bg-red-500/15 text-red-400 border border-red-500/25',
-  HOLD: 'bg-amber-500/15 text-amber-400 border border-amber-500/25',
+  BUY:  'bg-emerald-500 text-[#060E1C] font-black',
+  SELL: 'bg-red-500 text-white font-black',
+  HOLD: 'bg-amber-500 text-[#060E1C] font-black',
 };
 
 export default function Dashboard() {
@@ -44,8 +44,8 @@ export default function Dashboard() {
             <ScanLine className="text-gold-400" size={34} strokeWidth={1.5} />
           </div>
         </div>
-        <h1 className="font-card text-5xl uppercase tracking-widest text-white mb-3">
-          Welcome to CardIQ
+        <h1 className="font-card text-5xl uppercase tracking-widest mb-3">
+          <span className="title-gold">Welcome to CardIQ</span>
         </h1>
         <p className="text-slate-400 text-lg mb-10 max-w-md font-sans leading-relaxed">
           AI-powered sports card portfolio intelligence. Scan cards, track live values, and get market signals.
@@ -78,11 +78,11 @@ export default function Dashboard() {
 
         {/* Portfolio Value */}
         <div className="stat-card p-7">
-          <p className="text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest mb-2">
+          <p className="text-muted text-[10px] font-display font-semibold uppercase tracking-widest mb-2">
             Portfolio Value
           </p>
-          <p className="font-card text-4xl text-white tabular-nums">{formatCurrency(totalValue)}</p>
-          <p className={`text-sm mt-2 font-semibold flex items-center gap-1.5 tabular-nums ${totalGain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <p className="font-card text-4xl tabular-nums title-gold">{formatCurrency(totalValue)}</p>
+          <p className={`text-sm mt-2 font-semibold flex items-center gap-1.5 tabular-nums ${totalGain >= 0 ? 'text-electric' : 'text-red-400'}`}>
             {totalGain >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)}{' '}
             <span className="text-xs opacity-80">({formatPct(totalRoi)})</span>
@@ -127,11 +127,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <Link
           href="/scan"
-          className="group chrome-panel p-7 hover:border-[rgba(0,212,255,0.25)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer"
+          className="group chrome-panel p-7 hover:border-[rgba(0,212,170,0.25)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="w-11 h-11 border border-[rgba(0,212,255,0.2)] bg-electric/[0.08] flex items-center justify-center mb-4 rounded-md">
+              <div className="w-11 h-11 border border-[rgba(0,212,170,0.2)] bg-electric/[0.08] flex items-center justify-center mb-4 rounded-md">
                 <ScanLine className="text-electric" size={19} />
               </div>
               <h3 className="font-display font-black text-white uppercase tracking-widest text-base mb-1.5">Scan a Card</h3>
@@ -188,7 +188,7 @@ export default function Dashboard() {
               <Link
                 key={card.id}
                 href={`/portfolio/${card.id}`}
-                className="chrome-panel p-5 hover:border-[rgba(0,212,255,0.2)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer block"
+                className="chrome-panel p-5 hover:border-[rgba(245,200,66,0.2)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer block"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

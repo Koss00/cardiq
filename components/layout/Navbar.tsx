@@ -22,11 +22,11 @@ export default function Navbar() {
   const roi        = calcRoi(totalCost, totalValue);
 
   return (
-    <header className="border-b border-[rgba(0,212,255,0.08)] bg-[rgba(6,14,28,0.96)] backdrop-blur-xl sticky top-0 z-50 chrome-texture">
-      {/* Prismatic top line */}
+    <header className="border-b border-[#1E2D45] bg-[rgba(6,14,28,0.96)] backdrop-blur-xl sticky top-0 z-50 chrome-texture">
+      {/* Gold top line */}
       <div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
-        style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(245,200,66,0.5) 30%, rgba(0,212,255,0.5) 60%, transparent 100%)' }}
+        style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(245,200,66,0.6) 30%, rgba(250,224,122,0.7) 50%, rgba(245,200,66,0.6) 70%, transparent 100%)' }}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -103,7 +103,7 @@ export default function Navbar() {
       </div>
 
       {/* Mobile bottom nav */}
-      <div className="md:hidden border-t border-[rgba(0,212,255,0.07)] flex" role="navigation" aria-label="Mobile navigation">
+      <div className="md:hidden border-t border-[#1E2D45] flex" role="navigation" aria-label="Mobile navigation">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (

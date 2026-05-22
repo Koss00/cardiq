@@ -232,7 +232,7 @@ export default function TradingCard({ card, signal, cardSignal }: Props) {
                   </div>
                   <div className="flex items-center gap-1" data-no-flip>
                     <button onClick={refreshPrice} disabled={refreshing} title="Refresh price"
-                      className="w-5 h-5 flex items-center justify-center rounded-sm bg-navy-800 border border-[rgba(0,212,255,0.12)] text-chrome-500 hover:text-electric transition-colors disabled:opacity-40">
+                      className="w-5 h-5 flex items-center justify-center rounded-sm bg-navy-800 border border-[#1E2D45] text-chrome-500 hover:text-electric transition-colors disabled:opacity-40">
                       {refreshing ? <Loader2 size={8} className="animate-spin" /> : <RefreshCw size={8} />}
                     </button>
                     <button onClick={handleRemove} title="Remove card"
@@ -283,7 +283,7 @@ export default function TradingCard({ card, signal, cardSignal }: Props) {
                         <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Paid</p>
                         <p className="font-display font-black text-chrome-300 leading-none" style={{ fontSize: '18px' }}>{formatCurrency(card.purchasePrice)}</p>
                       </div>
-                      <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(0,212,255,0.18)' }}>
+                      <div className="rounded-sm px-2 py-1.5 text-center" style={{ background: 'rgba(9,18,36,0.9)', border: '1px solid rgba(0,212,170,0.2)' }}>
                         <p className="font-display font-black uppercase text-chrome-500 mb-0.5" style={{ fontSize: '10px', letterSpacing: '1.5px' }}>Value</p>
                         <p className="font-display font-black text-white leading-none" style={{ fontSize: '18px' }}>{formatCurrency(card.currentValue)}</p>
                       </div>
@@ -340,7 +340,7 @@ export default function TradingCard({ card, signal, cardSignal }: Props) {
                     <button
                       onClick={refreshPrice}
                       disabled={refreshing}
-                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[rgba(0,212,255,0.12)] text-chrome-400 hover:text-electric font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
+                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded-sm bg-navy-800 border border-[#1E2D45] text-chrome-400 hover:text-electric font-display font-black uppercase tracking-widest transition-colors disabled:opacity-40"
                       style={{ fontSize: '8px' }}
                     >
                       {refreshing ? <Loader2 size={7} className="animate-spin" /> : <RefreshCw size={7} />}

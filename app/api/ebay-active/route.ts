@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedEbay, setCachedEbay } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { getClientIp, validateQuery } from '@/lib/security';
 
 const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const query = searchParams.get('q');
+  const ip = getClientIp(req);
+  const rl = checkRateLimit(ip, 'ebay-active', 20);
+  if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
-  if (!query) {
-    return NextResponse.json({ error: 'q parameter required' }, { status: 400 });
+  const { searchParams } = new URL(req.url);
+  const raw = searchParams.get('q');
+  const qResult = validateQuery(raw);
+  if (!qResult.ok) {
+    return NextResponse.json({ error: qResult.error }, { status: 400 });
   }
+  const query = qResult.value;
 
   const cacheKey = `active:${query}`;
   const cached = getCachedEbay(cacheKey);
@@ -25,9 +32,8 @@ export async function GET(req: NextRequest) {
   try {
     token = await getEbayAppToken();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[ebay-active] auth failed:', msg);
-    return NextResponse.json({ error: msg, listings: [], fromCache: false }, { status: 200 });
+    console.error('[ebay-active] auth failed:', err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: 'eBay authentication failed.', listings: [], fromCache: false }, { status: 200 });
   }
 
   try {
@@ -38,10 +44,7 @@ export async function GET(req: NextRequest) {
       limit:  '10',
     });
 
-    const fullUrl = `${BROWSE_API}?${params.toString()}`;
-    console.log('[ebay-active] request URL:', fullUrl);
-
-    const res = await fetch(fullUrl, {
+    const res = await fetch(`${BROWSE_API}?${params.toString()}`, {
       headers: {
         'Authorization':           `Bearer ${token}`,
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
@@ -50,13 +53,13 @@ export async function GET(req: NextRequest) {
       next: { revalidate: 0 },
     });
 
-    console.log('[ebay-active] status:', res.status, res.statusText);
+    console.log('[ebay-active] status:', res.status);
     const rawBody = await res.text();
-    console.log('[ebay-active] raw response:', rawBody.slice(0, 600));
 
     if (!res.ok) {
+      console.error(`[ebay-active] HTTP ${res.status}:`, rawBody.slice(0, 200));
       return NextResponse.json(
-        { error: `eBay Browse API HTTP ${res.status}: ${rawBody.slice(0, 200)}`, listings: [], fromCache: false },
+        { error: 'eBay listings unavailable. Please try again.', listings: [], fromCache: false },
         { status: 200 }
       );
     }
@@ -85,9 +88,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ listings, fromCache: false });
 
   } catch (err) {
-    console.error('[ebay-active] error:', err);
+    console.error('[ebay-active] error:', err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { error: 'eBay active request failed — check server logs', listings: [], fromCache: false },
+      { error: 'eBay listings unavailable. Please try again.', listings: [], fromCache: false },
       { status: 200 }
     );
   }

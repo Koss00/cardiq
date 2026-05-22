@@ -142,20 +142,12 @@ export function setCachedStats(key: string, stats: unknown) {
 // fresh data is fetched. Builds up a trend line over days/weeks.
 
 export function recordPriceHistory(key: string, avgPrice: number) {
-  const cache = readJson<PriceHistoryCache>(PRICE_HISTORY_FILE, {});
-  const entry = cache[key] ?? { points: [] };
-  // Deduplicate: skip if the most recent point was recorded in the last 4 hours
-  const lastPoint = entry.points[entry.points.length - 1];
-  const tooRecent = lastPoint
-    && Date.now() - new Date(lastPoint.timestamp).getTime() < 4 * 60 * 60 * 1000;
-  if (!tooRecent) {
-    entry.points = [...entry.points.slice(-49), { price: avgPrice, timestamp: new Date().toISOString() }];
-    cache[key] = entry;
-    writeJson(PRICE_HISTORY_FILE, cache);
-  }
+  // Write to DB async — non-blocking so eBay routes aren't slowed down
+  import('@/lib/db').then(({ dbRecordPrice }) => dbRecordPrice(key, avgPrice)).catch(() => {});
 }
 
 export function getPriceHistory(key: string): PricePoint[] {
+  // Sync fallback from file cache — DB reads happen in the signals route directly
   const cache = readJson<PriceHistoryCache>(PRICE_HISTORY_FILE, {});
   return cache[key]?.points ?? [];
 }

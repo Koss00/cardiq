@@ -59,33 +59,96 @@ const StoreContext = createContext<{
   dispatch: React.Dispatch<Action>;
 } | null>(null);
 
+// ─── DB sync helpers ──────────────────────────────────────────────────────────
+
+function dbSaveCard(card: Card) {
+  fetch('/api/portfolio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card }),
+  }).catch(() => {});
+}
+
+function dbDeleteCard(id: string) {
+  fetch('/api/portfolio', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  }).catch(() => {});
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // On mount: load from DB first, fall back to localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('cardiq-portfolio');
-    if (saved) {
-      try {
-        const parsed: State = JSON.parse(saved);
-        dispatch({ type: 'LOAD_STATE', state: parsed });
-        // Silently warm the server-side signal cache in the background
-        if (parsed.cards?.length) {
-          fetch('/api/signals/prefetch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cards: parsed.cards }),
-          }).catch(() => {});
+    fetch('/api/portfolio')
+      .then((r) => r.json())
+      .then(({ cards }: { cards: Card[] }) => {
+        if (cards?.length) {
+          // Merge signals from localStorage if present
+          const saved = localStorage.getItem('cardiq-portfolio');
+          const signals = saved ? (JSON.parse(saved) as State).signals ?? [] : [];
+          dispatch({ type: 'LOAD_STATE', state: { cards, signals } });
+          if (cards.length) {
+            fetch('/api/signals/prefetch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cards }),
+            }).catch(() => {});
+          }
+        } else {
+          // No DB data yet — load from localStorage (first-time migration)
+          const saved = localStorage.getItem('cardiq-portfolio');
+          if (saved) {
+            try {
+              const parsed: State = JSON.parse(saved);
+              dispatch({ type: 'LOAD_STATE', state: parsed });
+              // Migrate existing cards up to DB
+              parsed.cards?.forEach((card) => dbSaveCard(card));
+              if (parsed.cards?.length) {
+                fetch('/api/signals/prefetch', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ cards: parsed.cards }),
+                }).catch(() => {});
+              }
+            } catch {}
+          }
         }
-      } catch {}
-    }
+      })
+      .catch(() => {
+        // DB unavailable — fall back to localStorage
+        const saved = localStorage.getItem('cardiq-portfolio');
+        if (saved) {
+          try {
+            dispatch({ type: 'LOAD_STATE', state: JSON.parse(saved) });
+          } catch {}
+        }
+      });
   }, []);
 
+  // Keep localStorage in sync as instant local cache
   useEffect(() => {
     localStorage.setItem('cardiq-portfolio', JSON.stringify(state));
   }, [state]);
 
+  // Wrap dispatch to sync card mutations to DB
+  const syncDispatch: React.Dispatch<Action> = (action) => {
+    dispatch(action);
+    if (action.type === 'ADD_CARD')    dbSaveCard(action.card);
+    if (action.type === 'UPDATE_CARD') {
+      // Build the updated card from current state for DB upsert
+      const card = state.cards.find((c) => c.id === action.id);
+      if (card) dbSaveCard({ ...card, ...action.updates });
+    }
+    if (action.type === 'REMOVE_CARD') dbDeleteCard(action.id);
+  };
+
   return (
-    <StoreContext.Provider value={{ state, dispatch }}>
+    <StoreContext.Provider value={{ state, dispatch: syncDispatch }}>
       {children}
     </StoreContext.Provider>
   );

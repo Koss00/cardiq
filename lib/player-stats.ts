@@ -85,6 +85,7 @@ export async function fetchPlayerStats(playerName: string, sport: string): Promi
     if      (sport === 'Baseball')   stats = await fetchMlbStats(playerName);
     else if (sport === 'Basketball') stats = await fetchNbaStats(playerName);
     else if (sport === 'Football')   stats = await fetchNflStats(playerName);
+    else if (sport === 'Hockey')     stats = await fetchNhlStats(playerName);
     else if (sport === 'Golf')       stats = await fetchGolfStats(playerName);
   } catch (err) {
     console.error(`[player-stats] ${sport} failed for "${playerName}":`, err);
@@ -298,7 +299,6 @@ async function fetchNbaStats(playerName: string): Promise<PlayerStats | null> {
 async function fetchNbaViaBallDontLie(playerName: string, apiKey: string): Promise<PlayerStats | null> {
   // BallDontLie v1 uses raw API key — NOT "Bearer <token>"
   const authHeader = apiKey.startsWith('Bearer ') ? apiKey : apiKey;
-  console.log(`[player-stats] BallDontLie auth header: "Authorization: ${authHeader.slice(0, 8)}..." (length=${authHeader.length})`);
 
   const searchUrl = `https://api.balldontlie.io/v1/players?search=${encodeURIComponent(playerName)}&per_page=5`;
   console.log(`[player-stats] BallDontLie search URL: ${searchUrl}`);
@@ -627,6 +627,95 @@ async function fetchNflDirectStats(
     stats:  entries,
     source: 'ESPN',
     knownActive: isKnownActive,
+  };
+}
+
+// ─── NHL via NHL Stats API (statsapi.nhle.com) ────────────────────────────────
+
+async function fetchNhlStats(playerName: string): Promise<PlayerStats | null> {
+  // Step 1: search for player by name
+  const searchRes = await fetch(
+    `https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=${encodeURIComponent(playerName)}&active=true`,
+    { next: { revalidate: 0 } }
+  );
+  console.log(`[player-stats] NHL search status: ${searchRes.status}`);
+  if (!searchRes.ok) return null;
+
+  const searchData = await searchRes.json() as Array<{
+    playerId: number;
+    name: string;
+    teamAbbrev?: string;
+    positionCode?: string;
+  }>;
+
+  if (!searchData.length) {
+    // Retry without active filter (retired players)
+    const retiredRes = await fetch(
+      `https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=${encodeURIComponent(playerName)}`,
+      { next: { revalidate: 0 } }
+    );
+    if (!retiredRes.ok) return null;
+    const retiredData = await retiredRes.json() as typeof searchData;
+    if (!retiredData.length) return null;
+    searchData.push(...retiredData);
+  }
+
+  const player = searchData.find((p) => nameMatch(p.name, playerName)) ?? searchData[0];
+  console.log(`[player-stats] NHL: matched "${player.name}" id=${player.playerId}`);
+
+  // Step 2: fetch player landing page (season stats)
+  const statsRes = await fetch(
+    `https://api-web.nhle.com/v1/player/${player.playerId}/landing`,
+    { next: { revalidate: 0 } }
+  );
+  if (!statsRes.ok) return null;
+
+  const statsData = await statsRes.json() as Record<string, unknown>;
+  const position = statsData.position as string | undefined;
+  const isGoalie = position === 'G';
+
+  // Get most recent season from featuredStats or last season in seasonTotals
+  const featured = statsData.featuredStats as Record<string, unknown> | undefined;
+  const regularSeason = (featured?.regularSeason as Record<string, unknown> | undefined)?.subSeason as Record<string, unknown> | undefined;
+
+  const entries: PlayerStat[] = [];
+  let seasonLabel = 'Current Season';
+  let team: string | undefined = player.teamAbbrev;
+
+  if (regularSeason) {
+    const season = featured?.season as number | undefined;
+    if (season) {
+      const yr = String(season);
+      seasonLabel = `${yr.slice(0, 4)}-${yr.slice(6)} SEASON`;
+    }
+
+    if (isGoalie) {
+      push(entries, 'GP',   regularSeason.gamesPlayed);
+      push(entries, 'W',    regularSeason.wins);
+      push(entries, 'GAA',  regularSeason.goalsAgainstAvg != null ? (regularSeason.goalsAgainstAvg as number).toFixed(2) : null);
+      push(entries, 'SV%',  regularSeason.savePctg != null ? (regularSeason.savePctg as number).toFixed(3) : null);
+      push(entries, 'SO',   regularSeason.shutouts);
+    } else {
+      push(entries, 'GP',  regularSeason.gamesPlayed);
+      push(entries, 'G',   regularSeason.goals);
+      push(entries, 'A',   regularSeason.assists);
+      push(entries, 'PTS', regularSeason.points);
+      push(entries, '+/-', regularSeason.plusMinus);
+    }
+  }
+
+  if (entries.length === 0) return null;
+
+  const isRetired = !player.teamAbbrev;
+  console.log(`[player-stats] NHL: ${entries.length} stats for ${player.name} (${seasonLabel})`);
+  return {
+    playerName: player.name,
+    sport: 'Hockey',
+    team,
+    season: seasonLabel,
+    stats: entries,
+    source: 'NHL API',
+    isRetired,
   };
 }
 

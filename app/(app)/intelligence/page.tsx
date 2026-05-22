@@ -207,8 +207,8 @@ export default function IntelligencePage() {
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="section-accent font-card text-5xl uppercase tracking-widest text-white">
-            Market Intelligence
+          <h1 className="section-accent font-card text-5xl uppercase tracking-widest">
+            <span className="title-gold">Market Intelligence</span>
           </h1>
           <p className="text-slate-500 text-sm mt-2 font-sans max-w-lg leading-relaxed">
             Three-dimensional AI analysis across price trends, player performance, and card scarcity
@@ -259,7 +259,7 @@ export default function IntelligencePage() {
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: cards.length ? `${(completedCount / cards.length) * 100}%` : '0%',
-                  background: 'linear-gradient(90deg, #F5C842, #00D4FF)',
+                  background: 'linear-gradient(90deg, #F5C842, #00D4AA)',
                 }}
               />
             </div>
@@ -320,7 +320,7 @@ export default function IntelligencePage() {
                   'transition-all duration-200 cursor-pointer',
                   filter === value
                     ? 'bg-gold-400 text-[#060E1C]'
-                    : 'text-chrome-400 hover:text-chrome-100 bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] hover:border-[rgba(192,200,216,0.22)]',
+                    : 'text-muted hover:text-chrome-100 bg-[#111D33] border border-[#1E2D45] hover:border-[rgba(30,45,69,0.9)]',
                 ].join(' ')}
               >
                 {label}

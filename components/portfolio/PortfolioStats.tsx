@@ -53,15 +53,15 @@ export default function PortfolioStats({ cards }: { cards: Card[] }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-[rgba(0,212,255,0.08)] border border-[rgba(0,212,255,0.12)] chrome-texture">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((s) => (
-        <div key={s.label} className={`bg-navy-800 p-4 ${s.foil ? 'foil' : ''}`}>
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-chrome-500 text-[10px] font-display font-black uppercase tracking-widest">{s.label}</p>
-            {s.icon && <s.icon size={13} className={s.iconColor} />}
+        <div key={s.label} className={`stat-card p-4 ${s.foil ? 'foil' : ''}`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-display font-semibold uppercase tracking-widest text-muted">{s.label}</p>
+            {s.icon && <s.icon size={14} className={s.iconColor} />}
           </div>
-          <p className="font-card text-2xl text-white truncate uppercase tracking-wide">{s.value}</p>
-          {s.sub && <p className={`text-xs mt-0.5 font-display font-semibold ${s.subColor}`}>{s.sub}</p>}
+          <p className={`font-display font-black text-2xl truncate leading-tight ${s.foil ? 'title-gold' : 'text-white'}`}>{s.value}</p>
+          {s.sub && <p className={`text-xs mt-1 font-display font-medium ${s.subColor}`}>{s.sub}</p>}
         </div>
       ))}
     </div>

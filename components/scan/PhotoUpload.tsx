@@ -45,12 +45,12 @@ export default function PhotoUpload({ onImage }: Props) {
 
   if (preview) {
     return (
-      <div className="relative inline-block">
+      <div className="relative chrome-panel p-4 flex items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={preview} alt="Card preview" className="max-h-72 border border-[rgba(0,212,255,0.2)] rounded-sm object-contain" />
+        <img src={preview} alt="Card preview" className="max-h-72 rounded-md border border-[rgba(245,200,66,0.2)] object-contain shadow-gold" />
         <button
           onClick={() => setPreview(null)}
-          className="absolute top-2 right-2 w-7 h-7 bg-navy-900 border border-[rgba(0,212,255,0.2)] rounded-sm flex items-center justify-center hover:border-[rgba(0,212,255,0.4)] transition-colors"
+          className="absolute top-3 right-3 w-8 h-8 bg-navy-900/90 border border-[#1E2D45] rounded-md flex items-center justify-center hover:border-[rgba(245,200,66,0.3)] hover:text-white transition-colors cursor-pointer"
         >
           <X size={13} className="text-chrome-300" />
         </button>
@@ -63,25 +63,44 @@ export default function PhotoUpload({ onImage }: Props) {
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
-      className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed cursor-pointer transition-all rounded-sm ${
+      className={`relative flex flex-col items-center justify-center w-full h-72 border-2 border-dashed cursor-pointer transition-all duration-200 rounded-xl overflow-hidden ${
         dragging
-          ? 'border-electric bg-electric/5 shadow-[0_0_30px_rgba(0,212,255,0.1)]'
-          : 'border-[rgba(0,212,255,0.15)] bg-navy-800/50 hover:border-[rgba(0,212,255,0.3)] hover:bg-navy-800'
+          ? 'border-gold-400 bg-gold-400/5 shadow-gold'
+          : 'border-[#1E2D45] bg-[#111D33] hover:border-[rgba(245,200,66,0.25)] hover:bg-[#131F36]'
       }`}
     >
-      <div className="flex flex-col items-center gap-4 text-center px-6">
-        <div className={`w-14 h-14 border flex items-center justify-center rounded-sm transition-all ${
-          dragging ? 'border-electric bg-electric/15' : 'border-[rgba(0,212,255,0.15)] bg-navy-700'
+      {/* Subtle radial glow behind icon */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: dragging
+            ? 'radial-gradient(ellipse at 50% 50%, rgba(245,200,66,0.08) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse at 50% 50%, rgba(30,45,69,0.6) 0%, transparent 65%)',
+          transition: 'background 0.2s ease',
+        }}
+      />
+
+      <div className="relative flex flex-col items-center gap-5 text-center px-8">
+        <div className={`w-16 h-16 border-2 rounded-xl flex items-center justify-center transition-all duration-200 ${
+          dragging
+            ? 'border-gold-400 bg-gold-400/15 shadow-gold'
+            : 'border-[#1E2D45] bg-navy-900'
         }`}>
-          {dragging ? <ImageIcon className="text-electric" size={26} /> : <Upload className="text-chrome-400" size={26} />}
+          {dragging
+            ? <ImageIcon className="text-gold-400" size={28} />
+            : <Upload className="text-chrome-500 group-hover:text-chrome-300" size={28} />}
         </div>
         <div>
-          <p className={`font-display font-black uppercase tracking-widest text-sm ${dragging ? 'text-electric' : 'text-white'}`}>
-            {dragging ? 'Drop to identify' : 'Upload card photo'}
+          <p className={`font-display font-bold text-base tracking-wide ${dragging ? 'text-gold-400' : 'text-white'}`}>
+            {dragging ? 'Drop to identify' : 'Upload a card photo'}
           </p>
-          <p className="text-chrome-500 text-xs mt-1 font-display">Drag & drop or click to browse — JPG, PNG, WebP</p>
+          <p className="text-muted text-sm mt-1.5 font-sans">
+            Drag & drop or <span className="text-gold-400 font-medium">click to browse</span>
+          </p>
+          <p className="text-chrome-600 text-xs mt-1">JPG, PNG, or WebP</p>
         </div>
       </div>
+
       <input type="file" className="hidden" accept={ACCEPTED.join(',')} onChange={handleChange} />
     </label>
   );

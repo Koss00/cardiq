@@ -43,8 +43,8 @@ export default function PortfolioPage() {
   function SortIcon({ col }: { col: SortKey }) {
     if (col !== sortKey) return <ChevronUp size={11} className="text-chrome-600" />;
     return sortDir === 'asc'
-      ? <ChevronUp size={11} className="text-electric" />
-      : <ChevronDown size={11} className="text-electric" />;
+      ? <ChevronUp size={11} className="text-gold-400" />
+      : <ChevronDown size={11} className="text-gold-400" />;
   }
 
   function signalFor(card: Card): SignalType | undefined {
@@ -76,21 +76,21 @@ export default function PortfolioPage() {
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="section-accent font-card text-5xl uppercase tracking-widest text-white">Collection</h1>
+          <h1 className="section-accent font-card text-5xl uppercase tracking-widest"><span className="title-gold">Collection</span></h1>
           <p className="text-slate-500 text-sm mt-1.5 font-sans">
             {cards.length} card{cards.length !== 1 ? 's' : ''} tracked
           </p>
         </div>
         <div className="flex items-center gap-3">
           {/* View toggle */}
-          <div className="flex items-center bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] rounded-md overflow-hidden">
+          <div className="flex items-center bg-[#111D33] border border-[rgba(192,200,216,0.12)] rounded-md overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
               className={`px-3 py-2.5 transition-all duration-200 cursor-pointer ${
                 viewMode === 'grid'
-                  ? 'bg-electric text-[#060E1C]'
+                  ? 'bg-gold-400 text-[#060E1C]'
                   : 'text-chrome-500 hover:text-chrome-200 hover:bg-white/[0.04]'
               }`}
             >
@@ -102,7 +102,7 @@ export default function PortfolioPage() {
               aria-pressed={viewMode === 'table'}
               className={`px-3 py-2.5 transition-all duration-200 cursor-pointer ${
                 viewMode === 'table'
-                  ? 'bg-electric text-[#060E1C]'
+                  ? 'bg-gold-400 text-[#060E1C]'
                   : 'text-chrome-500 hover:text-chrome-200 hover:bg-white/[0.04]'
               }`}
             >
@@ -131,7 +131,7 @@ export default function PortfolioPage() {
               className={`px-4 py-2 rounded-full text-xs font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer ${
                 sportFilter === s
                   ? 'bg-gold-400 text-[#060E1C]'
-                  : 'bg-[#0D1A30] border border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-chrome-100 hover:border-[rgba(192,200,216,0.22)]'
+                  : 'bg-[#111D33] border border-[rgba(192,200,216,0.12)] text-chrome-400 hover:text-chrome-100 hover:border-[rgba(192,200,216,0.22)]'
               }`}
             >
               {s}
