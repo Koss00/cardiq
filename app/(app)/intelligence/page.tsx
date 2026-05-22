@@ -285,6 +285,28 @@ export default function IntelligencePage() {
         </div>
       )}
 
+      {/* ── Empty state (cards exist but no signals yet) ────────────── */}
+      {!isGenerating && signals.length === 0 && (
+        <div className="chrome-panel p-10 text-center">
+          <div className="w-12 h-12 border border-[rgba(245,200,66,0.28)] bg-[rgba(245,200,66,0.07)] flex items-center justify-center mb-4 rounded-xl mx-auto">
+            <Brain className="text-gold-400" size={22} strokeWidth={1.5} />
+          </div>
+          <p className="text-white font-display font-black uppercase tracking-widest text-sm mb-1">
+            No signals yet
+          </p>
+          <p className="text-slate-500 text-sm font-sans mb-5">
+            Hit Refresh to generate AI signals for all {cards.length} card{cards.length !== 1 ? 's' : ''} in your portfolio
+          </p>
+          <button
+            onClick={generateSignals}
+            className="btn-gold inline-flex items-center gap-2 px-5 py-2.5 font-black text-xs uppercase tracking-widest"
+          >
+            <RefreshCw size={13} />
+            Generate Signals
+          </button>
+        </div>
+      )}
+
       {/* ── Completed view ───────────────────────────────────────────── */}
       {!isGenerating && signals.length > 0 && (
         <>
@@ -340,10 +362,11 @@ export default function IntelligencePage() {
               <SignalCard key={signal.cardId} signal={signal} />
             ))}
           </div>
-
-          <PortfolioRiskMetrics />
         </>
       )}
+
+      {/* ── Portfolio Risk Metrics — always visible when cards exist ─── */}
+      {!isGenerating && <PortfolioRiskMetrics />}
     </div>
   );
 }
