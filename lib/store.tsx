@@ -7,11 +7,12 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
-import { Card, CardSignal } from '@/types';
+import { Card, CardSignal, PriceAlert } from '@/types';
 
 interface State {
-  cards: Card[];
+  cards:   Card[];
   signals: CardSignal[];
+  alerts:  PriceAlert[];
 }
 
 type Action =
@@ -20,9 +21,11 @@ type Action =
   | { type: 'REMOVE_CARD'; id: string }
   | { type: 'SET_SIGNALS'; signals: CardSignal[] }
   | { type: 'ADD_SIGNAL'; signal: CardSignal }
-  | { type: 'LOAD_STATE'; state: State };
+  | { type: 'LOAD_STATE'; state: State }
+  | { type: 'LOAD_ALERTS'; alerts: PriceAlert[] }
+  | { type: 'DISMISS_ALERT'; id: number };
 
-const initialState: State = { cards: [], signals: [] };
+const initialState: State = { cards: [], signals: [], alerts: [] };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -48,7 +51,11 @@ function reducer(state: State, action: Action): State {
       return { ...state, signals };
     }
     case 'LOAD_STATE':
-      return action.state;
+      return { ...action.state, alerts: state.alerts };
+    case 'LOAD_ALERTS':
+      return { ...state, alerts: action.alerts };
+    case 'DISMISS_ALERT':
+      return { ...state, alerts: state.alerts.filter((a) => a.id !== action.id) };
     default:
       return state;
   }
@@ -77,6 +84,10 @@ function dbDeleteCard(id: string) {
   }).catch(() => {});
 }
 
+function apiDismissAlert(id: number) {
+  fetch(`/api/alerts/${id}/dismiss`, { method: 'PATCH' }).catch(() => {});
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -91,7 +102,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // Merge signals from localStorage if present
           const saved = localStorage.getItem('cardiq-portfolio');
           const signals = saved ? (JSON.parse(saved) as State).signals ?? [] : [];
-          dispatch({ type: 'LOAD_STATE', state: { cards, signals } });
+          dispatch({ type: 'LOAD_STATE', state: { cards, signals, alerts: [] } });
+          fetch('/api/alerts')
+            .then((r) => r.json())
+            .then(({ alerts }: { alerts: PriceAlert[] }) => {
+              if (alerts?.length) dispatch({ type: 'LOAD_ALERTS', alerts });
+            })
+            .catch(() => {});
           if (cards.length) {
             fetch('/api/signals/prefetch', {
               method: 'POST',
@@ -130,10 +147,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  // Keep localStorage in sync as instant local cache
+  // Keep localStorage in sync as instant local cache (exclude alerts — DB-authoritative)
   useEffect(() => {
-    localStorage.setItem('cardiq-portfolio', JSON.stringify(state));
-  }, [state]);
+    localStorage.setItem('cardiq-portfolio', JSON.stringify({ cards: state.cards, signals: state.signals }));
+  }, [state.cards, state.signals]);
 
   // Wrap dispatch to sync card mutations to DB
   const syncDispatch: React.Dispatch<Action> = (action) => {
@@ -144,7 +161,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const card = state.cards.find((c) => c.id === action.id);
       if (card) dbSaveCard({ ...card, ...action.updates });
     }
-    if (action.type === 'REMOVE_CARD') dbDeleteCard(action.id);
+    if (action.type === 'REMOVE_CARD')  dbDeleteCard(action.id);
+    if (action.type === 'DISMISS_ALERT') apiDismissAlert(action.id);
   };
 
   return (

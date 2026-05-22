@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbGetCards } from '@/lib/db';
+import { dbGetCards, dbGetPriceHistory, dbCreateAlert, initSchema } from '@/lib/db';
 import { setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 
-const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
+const BROWSE_API          = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
+const ALERT_THRESHOLD_PCT = 10;
 
 export async function POST(req: NextRequest) {
   // Verify secret so only GitHub Actions can trigger this
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'eBay auth failed' }, { status: 500 });
   }
+
+  await initSchema().catch(() => {});
 
   let refreshed = 0;
   const errors: string[] = [];
@@ -70,6 +73,26 @@ export async function POST(req: NextRequest) {
         const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
         recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
         refreshed++;
+
+        // ── Alert detection ───────────────────────────────────────────────
+        const history = await dbGetPriceHistory(`history:${query}`);
+        if (history.length >= 2) {
+          const prevPrice = history[history.length - 2].price;
+          const currPrice = history[history.length - 1].price;
+          if (prevPrice > 0) {
+            const pctChange = ((currPrice - prevPrice) / prevPrice) * 100;
+            if (Math.abs(pctChange) >= ALERT_THRESHOLD_PCT) {
+              await dbCreateAlert({
+                cardId:    card.id,
+                player:    card.player,
+                alertType: pctChange > 0 ? 'SPIKE' : 'DROP',
+                oldPrice:  prevPrice,
+                newPrice:  currPrice,
+                pctChange: Math.round(pctChange * 100) / 100,
+              });
+            }
+          }
+        }
       }
 
       // Throttle — avoid eBay rate limits

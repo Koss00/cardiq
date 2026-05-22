@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store';
 import SignalCard from '@/components/intelligence/SignalCard';
 import SignalSkeleton from '@/components/intelligence/SignalSkeleton';
 import { CardSignal, SignalType } from '@/types';
+import PortfolioRiskMetrics from '@/components/intelligence/PortfolioRiskMetrics';
 
 const FILTER_OPTS: Array<{ label: string; value: SignalType | 'ALL' }> = [
   { label: 'All',  value: 'ALL'  },
@@ -339,6 +340,8 @@ export default function IntelligencePage() {
               <SignalCard key={signal.cardId} signal={signal} />
             ))}
           </div>
+
+          <PortfolioRiskMetrics />
         </>
       )}
     </div>

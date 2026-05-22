@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
 import { SAMPLE_CARDS } from '@/lib/sample-data';
 import { SignalType } from '@/types';
+import AlertsBanner from '@/components/dashboard/AlertsBanner';
 
 const SIGNAL_STYLES: Record<SignalType, string> = {
   BUY:  'bg-emerald-500 text-[#060E1C] font-black',
@@ -167,6 +168,9 @@ export default function Dashboard() {
           </div>
         </Link>
       </div>
+
+      {/* ── Price alerts ───────────────────────────────────────────────── */}
+      <AlertsBanner />
 
       {/* ── Recent cards ───────────────────────────────────────────────── */}
       <div>

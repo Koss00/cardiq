@@ -87,4 +87,33 @@ export interface ConfidenceFactor {
   description: string;
 }
 
+export type AlertType = 'SPIKE' | 'DROP';
+
+export interface PriceAlert {
+  id: number;
+  cardId: string;
+  player: string;
+  alertType: AlertType;
+  oldPrice: number;
+  newPrice: number;
+  pctChange: number;
+  createdAt: string;
+}
+
+export interface CardMetrics {
+  cardId: string;
+  player: string;
+  kelly: number | null;
+  sharpe: number | null;
+  maxDrawdown: number | null;
+  pricePoints: number;
+}
+
+export interface PortfolioMetrics {
+  portfolioKelly: number | null;
+  portfolioSharpe: number | null;
+  portfolioMaxDrawdown: number | null;
+  cards: CardMetrics[];
+  computedAt: string;
+}
 

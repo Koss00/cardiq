@@ -37,6 +37,30 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_price_history_query
     ON price_history (query_key, recorded_at DESC)
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS price_alerts (
+      id          SERIAL PRIMARY KEY,
+      card_id     TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+      player      TEXT NOT NULL,
+      alert_type  TEXT NOT NULL CHECK (alert_type IN ('SPIKE', 'DROP')),
+      old_price   NUMERIC(10,2) NOT NULL,
+      new_price   NUMERIC(10,2) NOT NULL,
+      pct_change  NUMERIC(6,2)  NOT NULL,
+      dismissed   BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_price_alerts_active
+    ON price_alerts (dismissed, created_at DESC)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_price_alerts_card
+    ON price_alerts (card_id, created_at DESC)
+  `;
 }
 
 // ─── Cards CRUD ───────────────────────────────────────────────────────────────
@@ -110,6 +134,56 @@ export async function dbGetPriceHistory(queryKey: string) {
     price: parseFloat(r.price as string),
     timestamp: r.recorded_at as string,
   }));
+}
+
+// ─── Price alerts ─────────────────────────────────────────────────────────────
+
+export interface AlertRow {
+  id: number;
+  cardId: string;
+  player: string;
+  alertType: 'SPIKE' | 'DROP';
+  oldPrice: number;
+  newPrice: number;
+  pctChange: number;
+  createdAt: string;
+}
+
+export async function dbCreateAlert(params: {
+  cardId: string;
+  player: string;
+  alertType: 'SPIKE' | 'DROP';
+  oldPrice: number;
+  newPrice: number;
+  pctChange: number;
+}): Promise<void> {
+  await sql`
+    INSERT INTO price_alerts (card_id, player, alert_type, old_price, new_price, pct_change)
+    VALUES (${params.cardId}, ${params.player}, ${params.alertType}, ${params.oldPrice}, ${params.newPrice}, ${params.pctChange})
+  `;
+}
+
+export async function dbGetActiveAlerts(): Promise<AlertRow[]> {
+  const rows = await sql`
+    SELECT id, card_id, player, alert_type, old_price, new_price, pct_change, created_at
+    FROM price_alerts
+    WHERE dismissed = FALSE
+    ORDER BY created_at DESC
+  `;
+  return rows.map((r) => ({
+    id:        r.id as number,
+    cardId:    r.card_id as string,
+    player:    r.player as string,
+    alertType: r.alert_type as 'SPIKE' | 'DROP',
+    oldPrice:  parseFloat(r.old_price as string),
+    newPrice:  parseFloat(r.new_price as string),
+    pctChange: parseFloat(r.pct_change as string),
+    createdAt: r.created_at as string,
+  }));
+}
+
+export async function dbDismissAlert(id: number): Promise<void> {
+  await sql`UPDATE price_alerts SET dismissed = TRUE WHERE id = ${id}`;
 }
 
 // ─── Internal types ───────────────────────────────────────────────────────────
