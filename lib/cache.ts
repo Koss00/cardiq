@@ -1,103 +1,24 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { Card, PricePoint } from '@/types';
 
-// All cache files live in <project-root>/.cache/
-const CACHE_DIR = path.join(process.cwd(), '.cache');
-const SCANS_FILE = path.join(CACHE_DIR, 'card-scans.json');
-const EBAY_FILE = path.join(CACHE_DIR, 'ebay-pricing.json');
-const SIGNALS_FILE = path.join(CACHE_DIR, 'signals.json');
-const STATS_FILE = path.join(CACHE_DIR, 'player-stats.json');
-const PRICE_HISTORY_FILE = path.join(CACHE_DIR, 'price-history.json');
-
-const EBAY_TTL_MS = 24 * 60 * 60 * 1000;
+const EBAY_TTL_MS   = 24 * 60 * 60 * 1000;
 const SIGNAL_TTL_MS = 24 * 60 * 60 * 1000;
-const STATS_TTL_MS = 24 * 60 * 60 * 1000;
+const STATS_TTL_MS  = 24 * 60 * 60 * 1000;
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── In-memory caches (per serverless instance) ───────────────────────────────
+// File-based caching doesn't work in Vercel serverless (read-only filesystem).
+// Module-level Maps give us the same TTL behaviour within a warm function's lifetime.
 
-interface ScanEntry {
-  result: unknown;
-  cardKey: string; // "Player | Year | Brand" — human-readable
-  cachedAt: string;
-}
+const scanCache    = new Map<string, { result: unknown; cardKey: string; cachedAt: number }>();
+const ebayCache    = new Map<string, { listings: unknown; cachedAt: number }>();
+const signalCache  = new Map<string, { signal: unknown; cachedAt: number }>();
+const statsCache   = new Map<string, { stats: unknown; cachedAt: number }>();
 
-interface EbayEntry {
-  listings: unknown;
-  cachedAt: string;
-}
+// ─── Hashing ─────────────────────────────────────────────────────────────────
 
-interface SignalEntry {
-  signal: unknown;
-  cachedAt: string;
-}
-
-interface StatsEntry {
-  stats: unknown;
-  cachedAt: string;
-}
-
-interface PriceHistoryEntry {
-  points: PricePoint[];
-}
-
-type ScanCache = Record<string, ScanEntry>;
-type EbayCache = Record<string, EbayEntry>;
-type SignalCache = Record<string, SignalEntry>;
-type StatsCache = Record<string, StatsEntry>;
-type PriceHistoryCache = Record<string, PriceHistoryEntry>;
-
-// ─── Low-level helpers ────────────────────────────────────────────────────────
-
-function ensureDir() {
-  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
-
-function readJson<T>(file: string, fallback: T): T {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf-8')) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(file: string, data: unknown) {
-  ensureDir();
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/** MD5 of the raw base64 string — fast and collision-resistant enough for a local cache. */
+/** MD5 of the raw base64 string — fast, collision-resistant enough for a local cache. */
 export function hashImage(base64: string): string {
   return crypto.createHash('md5').update(base64).digest('hex');
-}
-
-export function getCachedScan(imageHash: string): unknown | null {
-  const cache = readJson<ScanCache>(SCANS_FILE, {});
-  return cache[imageHash]?.result ?? null;
-}
-
-export function setCachedScan(imageHash: string, result: unknown, cardKey: string) {
-  const cache = readJson<ScanCache>(SCANS_FILE, {});
-  cache[imageHash] = { result, cardKey, cachedAt: new Date().toISOString() };
-  writeJson(SCANS_FILE, cache);
-}
-
-export function getCachedEbay(query: string): unknown | null {
-  const cache = readJson<EbayCache>(EBAY_FILE, {});
-  const entry = cache[query];
-  if (!entry) return null;
-  const ageMs = Date.now() - new Date(entry.cachedAt).getTime();
-  if (ageMs > EBAY_TTL_MS) return null; // stale — let caller refresh
-  return entry.listings;
-}
-
-export function setCachedEbay(query: string, listings: unknown) {
-  const cache = readJson<EbayCache>(EBAY_FILE, {});
-  cache[query] = { listings, cachedAt: new Date().toISOString() };
-  writeJson(EBAY_FILE, cache);
 }
 
 /**
@@ -109,57 +30,64 @@ export function hashCard(card: Card): string {
   return crypto.createHash('md5').update(key).digest('hex');
 }
 
-export function getCachedSignal(cardHash: string): unknown | null {
-  const cache = readJson<SignalCache>(SIGNALS_FILE, {});
-  const entry = cache[cardHash];
+// ─── Scan cache ───────────────────────────────────────────────────────────────
+
+export function getCachedScan(imageHash: string): unknown | null {
+  return scanCache.get(imageHash)?.result ?? null;
+}
+
+export function setCachedScan(imageHash: string, result: unknown, cardKey: string) {
+  scanCache.set(imageHash, { result, cardKey, cachedAt: Date.now() });
+}
+
+// ─── eBay cache ───────────────────────────────────────────────────────────────
+
+export function getCachedEbay(query: string): unknown | null {
+  const entry = ebayCache.get(query);
   if (!entry) return null;
-  if (Date.now() - new Date(entry.cachedAt).getTime() > SIGNAL_TTL_MS) return null;
+  if (Date.now() - entry.cachedAt > EBAY_TTL_MS) { ebayCache.delete(query); return null; }
+  return entry.listings;
+}
+
+export function setCachedEbay(query: string, listings: unknown) {
+  ebayCache.set(query, { listings, cachedAt: Date.now() });
+}
+
+// ─── Signal cache ─────────────────────────────────────────────────────────────
+
+export function getCachedSignal(cardHash: string): unknown | null {
+  const entry = signalCache.get(cardHash);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > SIGNAL_TTL_MS) { signalCache.delete(cardHash); return null; }
   return entry.signal;
 }
 
 export function setCachedSignal(cardHash: string, signal: unknown) {
-  const cache = readJson<SignalCache>(SIGNALS_FILE, {});
-  cache[cardHash] = { signal, cachedAt: new Date().toISOString() };
-  writeJson(SIGNALS_FILE, cache);
+  signalCache.set(cardHash, { signal, cachedAt: Date.now() });
 }
 
+// ─── Player stats cache ───────────────────────────────────────────────────────
+
 export function getCachedStats(key: string): unknown | null {
-  const cache = readJson<StatsCache>(STATS_FILE, {});
-  const entry = cache[key];
+  const entry = statsCache.get(key);
   if (!entry) return null;
-  if (Date.now() - new Date(entry.cachedAt).getTime() > STATS_TTL_MS) return null;
+  if (Date.now() - entry.cachedAt > STATS_TTL_MS) { statsCache.delete(key); return null; }
   return entry.stats;
 }
 
 export function setCachedStats(key: string, stats: unknown) {
-  const cache = readJson<StatsCache>(STATS_FILE, {});
-  cache[key] = { stats, cachedAt: new Date().toISOString() };
-  writeJson(STATS_FILE, cache);
+  statsCache.set(key, { stats, cachedAt: Date.now() });
 }
 
 // ─── Price history ────────────────────────────────────────────────────────────
-// Keyed by "history:{ebayQuery}" — records the average eBay price each time
-// fresh data is fetched. Builds up a trend line over days/weeks.
+// Delegates entirely to Neon DB — no local caching needed.
 
 export function recordPriceHistory(key: string, avgPrice: number) {
-  // Write to DB async — non-blocking so eBay routes aren't slowed down
   import('@/lib/db').then(({ dbRecordPrice }) => dbRecordPrice(key, avgPrice)).catch(() => {});
 }
 
 export function getPriceHistory(key: string): PricePoint[] {
-  // Sync fallback from file cache — DB reads happen in the signals route directly
-  const cache = readJson<PriceHistoryCache>(PRICE_HISTORY_FILE, {});
-  return cache[key]?.points ?? [];
-}
-
-/** Returns stats for both cache files — handy for debugging. */
-export function getCacheStats() {
-  const scans = readJson<ScanCache>(SCANS_FILE, {});
-  const ebay = readJson<EbayCache>(EBAY_FILE, {});
-  return {
-    scanEntries: Object.keys(scans).length,
-    ebayEntries: Object.keys(ebay).length,
-    scansFile: SCANS_FILE,
-    ebayFile: EBAY_FILE,
-  };
+  // Sync fallback — actual reads go through dbGetPriceHistory in the signals route.
+  void key;
+  return [];
 }
