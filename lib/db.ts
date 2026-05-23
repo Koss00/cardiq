@@ -137,6 +137,20 @@ async function _runMigrations() {
     CREATE INDEX IF NOT EXISTS idx_market_narratives_hash
     ON market_narratives (portfolio_hash, computed_at DESC)
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id         SERIAL PRIMARY KEY,
+      email      TEXT NOT NULL UNIQUE,
+      joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      welcomed   BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_waitlist_email
+    ON waitlist (email)
+  `;
 }
 
 // ─── Cards CRUD ───────────────────────────────────────────────────────────────
@@ -449,6 +463,40 @@ export async function dbGetNarrative(portfolioHash: string): Promise<NarrativeRo
     signalWinRate:  r.signal_win_rate != null ? parseFloat(r.signal_win_rate as string) : undefined,
     computedAt:     r.computed_at as string,
   };
+}
+
+// ─── Waitlist ─────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the email was newly inserted, false if it already existed.
+ */
+export async function dbAddToWaitlist(email: string): Promise<{ isNew: boolean; position: number }> {
+  // Try inserting; skip if duplicate
+  await sql`
+    INSERT INTO waitlist (email) VALUES (${email.toLowerCase().trim()})
+    ON CONFLICT (email) DO NOTHING
+  `;
+  // Always return position so we can show it in the welcome email
+  const rows = await sql`
+    SELECT COUNT(*) AS position FROM waitlist
+    WHERE joined_at <= (SELECT joined_at FROM waitlist WHERE email = ${email.toLowerCase().trim()})
+  `;
+  const position = parseInt(rows[0].position as string, 10);
+  // Check if this was a new entry (welcomed = false means brand new)
+  const check = await sql`
+    SELECT welcomed FROM waitlist WHERE email = ${email.toLowerCase().trim()}
+  `;
+  const isNew = check.length > 0 && check[0].welcomed === false;
+  return { isNew, position };
+}
+
+export async function dbMarkWelcomed(email: string): Promise<void> {
+  await sql`UPDATE waitlist SET welcomed = TRUE WHERE email = ${email.toLowerCase().trim()}`;
+}
+
+export async function dbGetWaitlistCount(): Promise<number> {
+  const rows = await sql`SELECT COUNT(*) AS count FROM waitlist`;
+  return parseInt(rows[0].count as string, 10);
 }
 
 // ─── Internal types ───────────────────────────────────────────────────────────
