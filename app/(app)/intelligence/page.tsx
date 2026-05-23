@@ -237,7 +237,7 @@ export default function IntelligencePage() {
             <span className="title-gold">Market Intelligence</span>
           </h1>
           <p className="text-slate-500 text-sm mt-2 font-sans max-w-lg leading-relaxed">
-            Three-dimensional AI analysis across price trends, player performance, and card scarcity
+            Four-dimensional AI analysis across price trends, player performance, card scarcity, and market regime
           </p>
         </div>
         <button
@@ -251,7 +251,7 @@ export default function IntelligencePage() {
       </div>
 
       {/* ── Dimension legend ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {DIMENSIONS.map(({ icon: Icon, label, color, bg }) => (
           <div key={label} className={`border rounded-md px-4 py-3.5 flex items-center gap-3 ${bg}`}>
             <Icon size={14} className={color} strokeWidth={2} />

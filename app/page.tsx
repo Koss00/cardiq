@@ -359,7 +359,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Features ────────────────────────────────────────────────────── */}
-      <section className="py-28 px-4 sm:px-6 lg:px-8">
+      <section id="features" className="py-28 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
             <p className="text-gold-400 text-[11px] font-black uppercase tracking-widest mb-4">Features</p>
@@ -475,12 +475,12 @@ export default function LandingPage() {
                   Launch App Free
                   <ArrowRight size={16} />
                 </Link>
-                <button
-                  onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })}
+                <a
+                  href="#features"
                   className="btn-ghost inline-flex items-center justify-center gap-2 px-9 py-4 font-bold text-sm uppercase tracking-widest"
                 >
                   See Features
-                </button>
+                </a>
               </div>
             </div>
           </div>
