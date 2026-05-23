@@ -5,8 +5,25 @@ const sql = neon(process.env.DATABASE_URL!);
 export default sql;
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
+// Module-level guard: only runs once per warm serverless instance.
+// All callers that do `await initSchema()` automatically share the same Promise.
 
-export async function initSchema() {
+let _schemaInitialized = false;
+let _initPromise: Promise<void> | null = null;
+
+export function initSchema(): Promise<void> {
+  if (_schemaInitialized) return Promise.resolve();
+  if (_initPromise) return _initPromise;
+  _initPromise = _runMigrations()
+    .then(() => { _schemaInitialized = true; })
+    .catch((err) => {
+      _initPromise = null; // reset so next call retries
+      throw err;
+    });
+  return _initPromise;
+}
+
+async function _runMigrations() {
   await sql`
     CREATE TABLE IF NOT EXISTS cards (
       id              TEXT PRIMARY KEY,

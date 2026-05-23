@@ -21,16 +21,40 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  poweredByHeader: false,
+  compress: true,
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.ebayimg.com' },
     ],
+    formats: ['image/avif', 'image/webp'],
   },
   async headers() {
     return [
       {
         source: '/(.*)',
         headers: securityHeaders,
+      },
+      // Cache static assets aggressively
+      {
+        source: '/_next/static/(.*)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      // Cache GET API responses that change infrequently
+      {
+        source: '/api/portfolio/metrics',
+        headers: [{ key: 'Cache-Control', value: 'private, max-age=3600, stale-while-revalidate=7200' }],
+      },
+      {
+        source: '/api/alerts',
+        headers: [{ key: 'Cache-Control', value: 'private, max-age=60, stale-while-revalidate=120' }],
+      },
+      {
+        source: '/api/portfolio',
+        headers: [{ key: 'Cache-Control', value: 'private, max-age=15, stale-while-revalidate=30' }],
       },
     ];
   },

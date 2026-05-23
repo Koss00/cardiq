@@ -2,16 +2,18 @@ import type { Metadata } from 'next';
 import { Inter, Outfit, Bebas_Neue } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const outfit = Outfit({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
+  weight: ['400', '700', '900'],
   variable: '--font-display',
+  display: 'swap',
 });
 const bebasNeue = Bebas_Neue({
   subsets: ['latin'],
   weight: ['400'],
   variable: '--font-card',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {

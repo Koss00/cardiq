@@ -2,17 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbGetCards, dbUpsertCard, dbDeleteCard, initSchema } from '@/lib/db';
 import { Card } from '@/types';
 
-let schemaReady = false;
-async function ensureSchema() {
-  if (!schemaReady) {
-    await initSchema();
-    schemaReady = true;
-  }
-}
-
 export async function GET() {
   try {
-    await ensureSchema();
+    await initSchema();
     const cards = await dbGetCards();
     return NextResponse.json({ cards });
   } catch (err) {
@@ -23,7 +15,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureSchema();
+    await initSchema();
     const { card }: { card: Card } = await req.json();
     await dbUpsertCard({
       id:               card.id,

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Brain, TrendingUp, AlertTriangle } from 'lucide-react';
-import crypto from 'crypto';
 import { CardSignal, MarketNarrative } from '@/types';
 
 interface Props {
