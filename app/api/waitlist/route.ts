@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { initSchema, dbAddToWaitlist, dbMarkWelcomed } from '@/lib/db';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 // Simple rate limit: 1 submission per IP per 60s (in-memory, resets on cold start)
 const recentIPs = new Map<string, number>();
 
@@ -32,6 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Only send welcome email once per address
     if (isNew && process.env.RESEND_API_KEY) {
+      const resend = new Resend(process.env.RESEND_API_KEY);
       try {
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL ?? 'CardIQ <onboarding@resend.dev>',
