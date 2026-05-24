@@ -8,6 +8,7 @@ import CardResult from '@/components/scan/CardResult';
 import { useStore } from '@/lib/store';
 import { IdentifiedCard, EbayListing, Card, Condition, Sport } from '@/types';
 import { generateId } from '@/lib/utils';
+import { buildEbayQuery } from '@/lib/ebay-utils';
 
 const CONDITIONS: Condition[] = [
   'Raw', 'PSA 10', 'PSA 9', 'PSA 8', 'PSA 7', 'BGS 9.5', 'BGS 9', 'SGC 10',
@@ -79,7 +80,7 @@ export default function ScanPage() {
   }
 
   async function fetchEbayPrices(card: IdentifiedCard) {
-    const query   = `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim();
+    const query   = buildEbayQuery(card.year, card.brand, card.player, card.variation);
     const encoded = encodeURIComponent(query);
 
     setSoldLoading(true);

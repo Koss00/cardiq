@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbGetCards, dbGetPriceHistory, dbCreateAlert, initSchema } from '@/lib/db';
 import { setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
+import { buildEbayQuery } from '@/lib/ebay-utils';
 
 const BROWSE_API          = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 const ALERT_THRESHOLD_PCT = 10;
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
 
   for (const card of cards) {
-    const query = `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim();
+    const query = buildEbayQuery(card.year, card.brand, card.player, card.variation);
     try {
       const params = new URLSearchParams({
         q:      query,

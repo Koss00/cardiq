@@ -1,6 +1,40 @@
 // ─── eBay Intelligence Utilities ─────────────────────────────────────────────
 // Extracts velocity, trend, and liquidity signals from raw eBay comp data.
 
+/**
+ * Builds a clean eBay search query from card fields.
+ *
+ * Removes noise that hurts keyword matching:
+ *  - "Numbered" is redundant (the /N serial already implies it)
+ *  - Duplicate set name words (e.g. "Prizm" appears in both "Panini Prizm Black"
+ *    and "Prizm Silver /175" — eBay treats this as a stricter filter)
+ */
+export function buildEbayQuery(
+  year: number | string,
+  brand: string,
+  player: string,
+  variation?: string,
+): string {
+  let varPart = (variation ?? '').trim();
+
+  // Strip "Numbered" (standalone word, any casing)
+  varPart = varPart.replace(/\bNumbered\b/gi, '').trim();
+  // Collapse multiple spaces left behind
+  varPart = varPart.replace(/\s{2,}/g, ' ').trim();
+
+  // Remove leading variation word if it already appears in the brand
+  // e.g. brand="Panini Prizm Black", variation="Prizm Silver /175" → "Silver /175"
+  if (varPart) {
+    const brandLower = brand.toLowerCase();
+    const firstVarWord = varPart.split(/\s+/)[0];
+    if (firstVarWord && brandLower.includes(firstVarWord.toLowerCase())) {
+      varPart = varPart.slice(firstVarWord.length).trim();
+    }
+  }
+
+  return `${year} ${brand} ${player}${varPart ? ' ' + varPart : ''}`.replace(/\s{2,}/g, ' ').trim();
+}
+
 export interface EbayIntel {
   avg: number;
   count: number;

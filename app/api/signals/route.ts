@@ -9,7 +9,7 @@ import {
 import { buildCardDetail } from '@/lib/signal-generator';
 import { fetchPlayerStats } from '@/lib/player-stats';
 import { fetchPlayerNews } from '@/lib/player-news';
-import { buildEbayIntel, formatEbayContext, EbayIntel } from '@/lib/ebay-utils';
+import { buildEbayIntel, buildEbayQuery, formatEbayContext, EbayIntel } from '@/lib/ebay-utils';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, sanitizeCardField } from '@/lib/security';
 
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
 
   const today      = new Date().toISOString().split('T')[0];
   const detail     = buildCardDetail(safeCard);
-  const ebayQuery  = `${safeCard.year} ${safeCard.brand} ${safeCard.player} ${safeCard.variation ?? ''}`.trim();
+  const ebayQuery  = buildEbayQuery(safeCard.year, safeCard.brand, safeCard.player, safeCard.variation);
 
   await initSchema().catch(() => {});
 
