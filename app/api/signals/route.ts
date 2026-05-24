@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { Card, PlayerStats, ConfidenceFactor } from '@/types';
+import { Card, CardSignal, PlayerStats, ConfidenceFactor } from '@/types';
 import { hashCard, getCachedSignal, setCachedSignal, getCachedEbay } from '@/lib/cache';
 import {
   dbGetPriceHistory, dbSaveSignal, dbGetRecentSignals, dbGetSignalWinRate,
@@ -156,6 +156,48 @@ export async function POST(req: NextRequest) {
       }),
       { headers: SSE_HEADERS }
     );
+  }
+
+  // ── DB cache — survives cold starts (in-memory cache does not) ────────────
+  // Check before calling Claude. Any signal < 24h old is returned directly.
+  if (!force) {
+    await initSchema().catch(() => {});
+    const recent = await dbGetRecentSignals(cardHash, 1).catch(() => []);
+    if (recent.length > 0) {
+      const row = recent[0];
+      const ageMs = row.generatedAt ? Date.now() - new Date(row.generatedAt).getTime() : Infinity;
+      if (ageMs < 24 * 60 * 60 * 1000) {
+        const dbSignal: CardSignal = {
+          cardId:           row.cardId,
+          player:           row.player,
+          signal:           row.signal,
+          confidence:       row.confidence,
+          summary:          row.summary,
+          priceTrend:       row.priceTrend   ?? '',
+          playerContext:    row.playerContext ?? '',
+          scarcityNote:     row.scarcityNote  ?? '',
+          marketContext:    row.marketContext,
+          priceTarget:      row.priceTarget,
+          timeframe:        row.timeframe,
+          wyckoffRegime:    row.wyckoffRegime as CardSignal['wyckoffRegime'],
+          marketHeatScore:  row.marketHeatScore,
+          evPerDollar:      row.evPerDollar,
+          qualityScore:     row.qualityScore,
+          qualityRationale: row.qualityRationale,
+          generatedAt:      row.generatedAt ?? new Date().toISOString(),
+        };
+        setCachedSignal(cardHash, dbSignal); // warm in-memory for this instance's lifetime
+        return new Response(
+          new ReadableStream({
+            start(ctrl) {
+              ctrl.enqueue(sse({ type: 'done', signal: dbSignal, fromCache: true }));
+              ctrl.close();
+            },
+          }),
+          { headers: SSE_HEADERS }
+        );
+      }
+    }
   }
 
   const today      = new Date().toISOString().split('T')[0];

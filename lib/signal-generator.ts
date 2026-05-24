@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Card, CardSignal, PlayerStats } from '@/types';
 import { hashCard, getCachedSignal, setCachedSignal } from './cache';
 import { fetchPlayerStats, KNOWN_ACTIVE } from './player-stats';
+import { dbGetRecentSignals } from './db';
 
 function norm(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -78,13 +79,46 @@ export async function generateSignalForCard(card: Card, force = false): Promise<
   const hash = hashCard(card);
 
   if (!force) {
+    // 1. In-memory cache (fast, dies on cold start)
     const cached = getCachedSignal(hash);
     if (cached) {
       const cachedSignal = cached as CardSignal;
-      // If the cached signal has no player stats, force regeneration so the
-      // hardcoded fallback stats get a chance to populate it
       if (cachedSignal.playerStats) return cachedSignal;
       console.log(`[signal] cached signal for "${card.player}" has no playerStats — regenerating`);
+    }
+
+    // 2. DB cache (persistent across cold starts — check before calling Claude)
+    try {
+      const recent = await dbGetRecentSignals(hash, 1);
+      if (recent.length > 0) {
+        const row = recent[0];
+        const ageMs = row.generatedAt ? Date.now() - new Date(row.generatedAt).getTime() : Infinity;
+        if (ageMs < 24 * 60 * 60 * 1000) {
+          const dbSignal: CardSignal = {
+            cardId:           row.cardId,
+            player:           row.player,
+            signal:           row.signal,
+            confidence:       row.confidence,
+            summary:          row.summary,
+            priceTrend:       row.priceTrend   ?? '',
+            playerContext:    row.playerContext ?? '',
+            scarcityNote:     row.scarcityNote  ?? '',
+            marketContext:    row.marketContext,
+            priceTarget:      row.priceTarget,
+            timeframe:        row.timeframe,
+            wyckoffRegime:    row.wyckoffRegime as CardSignal['wyckoffRegime'],
+            marketHeatScore:  row.marketHeatScore,
+            evPerDollar:      row.evPerDollar,
+            qualityScore:     row.qualityScore,
+            qualityRationale: row.qualityRationale,
+            generatedAt:      row.generatedAt ?? new Date().toISOString(),
+          };
+          setCachedSignal(hash, dbSignal);
+          return dbSignal;
+        }
+      }
+    } catch {
+      // DB unavailable — fall through to Claude generation
     }
   }
 
