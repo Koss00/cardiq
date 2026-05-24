@@ -139,7 +139,10 @@ export default function IntelligencePage() {
     let failCount = 0;
 
     await Promise.allSettled(
-      cards.map(async (card) => {
+      cards.map(async (card, i) => {
+        // Stagger requests by 300ms per card to stay within Tier 1 output token limits.
+        // Cached cards return instantly from DB so the delay is barely noticeable.
+        await new Promise((r) => setTimeout(r, i * 300));
         try {
           const res = await fetch('/api/signals', {
             method: 'POST',
