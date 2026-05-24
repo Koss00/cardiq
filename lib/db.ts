@@ -149,6 +149,15 @@ async function _runMigrations() {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS ebay_cache (
+      query_key  TEXT PRIMARY KEY,
+      listings   JSONB NOT NULL DEFAULT '[]',
+      source     TEXT NOT NULL DEFAULT 'browse',
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS waitlist (
       id         SERIAL PRIMARY KEY,
       email      TEXT NOT NULL UNIQUE,
@@ -473,6 +482,47 @@ export async function dbGetNarrative(portfolioHash: string): Promise<NarrativeRo
     signalWinRate:  r.signal_win_rate != null ? parseFloat(r.signal_win_rate as string) : undefined,
     computedAt:     r.computed_at as string,
   };
+}
+
+// ─── eBay cache (persistent across cold starts) ───────────────────────────────
+
+export interface EbayCacheRow {
+  listings: unknown[];
+  source: string;
+}
+
+export async function dbGetEbayCache(
+  queryKey: string,
+  maxAgeMs: number,
+): Promise<EbayCacheRow | null> {
+  const rows = await sql`
+    SELECT listings, source, cached_at
+    FROM ebay_cache
+    WHERE query_key = ${queryKey}
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const ageMs = Date.now() - new Date(rows[0].cached_at as string).getTime();
+  if (ageMs > maxAgeMs) return null;
+  return {
+    listings: rows[0].listings as unknown[],
+    source:   rows[0].source as string,
+  };
+}
+
+export async function dbSetEbayCache(
+  queryKey: string,
+  listings: unknown[],
+  source: string,
+): Promise<void> {
+  await sql`
+    INSERT INTO ebay_cache (query_key, listings, source, cached_at)
+    VALUES (${queryKey}, ${JSON.stringify(listings)}::jsonb, ${source}, NOW())
+    ON CONFLICT (query_key) DO UPDATE SET
+      listings  = EXCLUDED.listings,
+      source    = EXCLUDED.source,
+      cached_at = NOW()
+  `;
 }
 
 // ─── Waitlist ─────────────────────────────────────────────────────────────────

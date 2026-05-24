@@ -3,6 +3,9 @@ import { getCachedEbay, setCachedEbay } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, validateQuery } from '@/lib/security';
+import { dbGetEbayCache, dbSetEbayCache, initSchema } from '@/lib/db';
+
+const EBAY_DB_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
@@ -20,10 +23,23 @@ export async function GET(req: NextRequest) {
   const query = qResult.value;
 
   const cacheKey = `active:${query}`;
+
+  // 1. In-memory cache (fast, dies on cold start)
   const cached = getCachedEbay(cacheKey);
   if (cached) {
-    console.log(`[ebay-active] cache hit: "${query}"`);
     return NextResponse.json({ listings: cached, fromCache: true });
+  }
+
+  // 2. DB cache (persistent across cold starts — checked before hitting eBay API)
+  try {
+    await initSchema().catch(() => {});
+    const dbCached = await dbGetEbayCache(cacheKey, EBAY_DB_TTL_MS);
+    if (dbCached) {
+      setCachedEbay(cacheKey, dbCached.listings);
+      return NextResponse.json({ listings: dbCached.listings, fromCache: true });
+    }
+  } catch {
+    // DB unavailable — fall through to eBay API
   }
 
   console.log(`[ebay-active] fetching active listings for: "${query}"`);
@@ -84,7 +100,7 @@ export async function GET(req: NextRequest) {
       .filter((l) => l.price > 0);
 
     setCachedEbay(cacheKey, listings);
-    console.log(`[ebay-active] cached ${listings.length} active listings`);
+    dbSetEbayCache(cacheKey, listings, 'browse').catch(() => {});
     return NextResponse.json({ listings, fromCache: false });
 
   } catch (err) {

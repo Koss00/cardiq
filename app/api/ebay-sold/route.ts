@@ -3,6 +3,9 @@ import { getCachedEbay, setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, validateQuery } from '@/lib/security';
+import { dbGetEbayCache, dbSetEbayCache, initSchema } from '@/lib/db';
+
+const EBAY_DB_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const FINDING_API = 'https://svcs.ebay.com/services/search/FindingService/v1';
 const BROWSE_API  = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
@@ -19,8 +22,22 @@ export async function GET(req: NextRequest) {
   const query = qResult.value;
 
   const cacheKey = `sold-completed:${query}`;
+
+  // 1. In-memory cache (fast, dies on cold start)
   const cached = getCachedEbay(cacheKey);
-  if (cached) return NextResponse.json({ listings: cached, fromCache: true });
+  if (cached) return NextResponse.json({ listings: cached, fromCache: true, source: 'sold' });
+
+  // 2. DB cache (persistent across cold starts — checked before hitting eBay API)
+  try {
+    await initSchema().catch(() => {});
+    const dbCached = await dbGetEbayCache(cacheKey, EBAY_DB_TTL_MS);
+    if (dbCached) {
+      setCachedEbay(cacheKey, dbCached.listings); // warm in-memory
+      return NextResponse.json({ listings: dbCached.listings, fromCache: true, source: dbCached.source });
+    }
+  } catch {
+    // DB unavailable — fall through to eBay API
+  }
 
   const appId = process.env.EBAY_APP_ID;
   if (!appId) return NextResponse.json({ error: 'eBay not configured.', listings: [], fromCache: false });
@@ -66,6 +83,7 @@ export async function GET(req: NextRequest) {
 
         if (listings.length > 0) {
           setCachedEbay(cacheKey, listings);
+          dbSetEbayCache(cacheKey, listings, 'sold').catch(() => {});
           const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
           recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
           return NextResponse.json({ listings, fromCache: false, source: 'sold' });
@@ -108,6 +126,7 @@ export async function GET(req: NextRequest) {
     }).filter((l) => l.price > 0).sort((a, b) => a.price - b.price);
 
     setCachedEbay(cacheKey, listings);
+    dbSetEbayCache(cacheKey, listings, 'browse').catch(() => {});
     if (listings.length > 0) {
       const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
       recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
