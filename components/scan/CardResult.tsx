@@ -166,7 +166,7 @@ export default function CardResult({
         </p>
         {soldSource !== 'sold' && (
           <p className="text-[10px] text-amber-500/70 font-display mb-3">
-            Sold comps temporarily unavailable — eBay API limit reached
+            Sold comps unavailable for this card — showing active listings instead
           </p>
         )}
 
