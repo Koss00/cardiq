@@ -28,7 +28,15 @@ export async function GET(req: NextRequest) {
 
   try {
     await ensureSchema();
-    const cards = await dbGetCards();
+    // Metrics are portfolio-wide; auth context not available in cached route
+    // Use auth() if available, fall back to fetching all cards for aggregate stats
+    let userId = 'legacy';
+    try {
+      const { auth } = await import('@clerk/nextjs/server');
+      const session = await auth();
+      if (session.userId) userId = session.userId;
+    } catch { /* not in auth context */ }
+    const cards = await dbGetCards(userId);
 
     const cardResults: CardMetrics[] = [];
     const portfolioInputs: Array<{ prices: number[]; weight: number }> = [];

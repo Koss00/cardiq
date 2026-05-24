@@ -27,6 +27,7 @@ async function _runMigrations() {
   await sql`
     CREATE TABLE IF NOT EXISTS cards (
       id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL DEFAULT 'legacy',
       player          TEXT NOT NULL,
       year            INTEGER NOT NULL,
       brand           TEXT NOT NULL,
@@ -39,6 +40,15 @@ async function _runMigrations() {
       added_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_price_update TIMESTAMPTZ
     )
+  `;
+
+  // Add user_id column to existing cards table if it doesn't exist yet
+  await sql`
+    ALTER TABLE cards ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'legacy'
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards (user_id, added_at DESC)
   `;
 
   await sql`
@@ -155,9 +165,9 @@ async function _runMigrations() {
 
 // ─── Cards CRUD ───────────────────────────────────────────────────────────────
 
-export async function dbGetCards() {
+export async function dbGetCards(userId: string) {
   const rows = await sql`
-    SELECT * FROM cards ORDER BY added_at DESC
+    SELECT * FROM cards WHERE user_id = ${userId} ORDER BY added_at DESC
   `;
   return rows.map(rowToCard);
 }
@@ -165,11 +175,11 @@ export async function dbGetCards() {
 export async function dbUpsertCard(card: CardRow) {
   await sql`
     INSERT INTO cards (
-      id, player, year, brand, card_number, variation,
+      id, user_id, player, year, brand, card_number, variation,
       condition, sport, purchase_price, current_value,
       added_at, last_price_update
     ) VALUES (
-      ${card.id}, ${card.player}, ${card.year}, ${card.brand},
+      ${card.id}, ${card.user_id}, ${card.player}, ${card.year}, ${card.brand},
       ${card.card_number ?? null}, ${card.variation ?? null},
       ${card.condition}, ${card.sport},
       ${card.purchase_price}, ${card.current_value},
@@ -189,8 +199,8 @@ export async function dbUpsertCard(card: CardRow) {
   `;
 }
 
-export async function dbDeleteCard(id: string) {
-  await sql`DELETE FROM cards WHERE id = ${id}`;
+export async function dbDeleteCard(id: string, userId: string) {
+  await sql`DELETE FROM cards WHERE id = ${id} AND user_id = ${userId}`;
   await sql`DELETE FROM price_history WHERE query_key LIKE ${'history:%' + id + '%'}`;
 }
 
@@ -503,6 +513,7 @@ export async function dbGetWaitlistCount(): Promise<number> {
 
 interface CardRow {
   id: string;
+  user_id: string;
   player: string;
   year: number;
   brand: string;

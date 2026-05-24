@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BarChart3, ScanLine, Brain, Layers } from 'lucide-react';
+import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/lib/store';
 import { formatCurrency, calcRoi } from '@/lib/utils';
 
@@ -77,28 +78,30 @@ export default function Navbar() {
             })}
           </nav>
 
-          {/* Portfolio snapshot / CTA */}
-          {state.cards.length > 0 ? (
-            <Link
-              href="/dashboard"
-              className="text-right hidden sm:block group cursor-pointer"
-              aria-label="View dashboard"
-            >
-              <p className="font-display font-black text-sm text-white group-hover:text-gold-400 transition-colors duration-200 tabular-nums">
-                {formatCurrency(totalValue)}
-              </p>
-              <p className={`text-xs font-semibold tabular-nums ${roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI
-              </p>
-            </Link>
-          ) : (
-            <Link
-              href="/scan"
-              className="btn-gold text-[11px] px-4 py-2 rounded-sm uppercase tracking-widest font-display font-black"
-            >
-              Scan Card
-            </Link>
-          )}
+          {/* Portfolio snapshot + user button */}
+          <div className="flex items-center gap-4">
+            {state.cards.length > 0 && (
+              <Link
+                href="/dashboard"
+                className="text-right hidden sm:block group cursor-pointer"
+                aria-label="View dashboard"
+              >
+                <p className="font-display font-black text-sm text-white group-hover:text-gold-400 transition-colors duration-200 tabular-nums">
+                  {formatCurrency(totalValue)}
+                </p>
+                <p className={`text-xs font-semibold tabular-nums ${roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI
+                </p>
+              </Link>
+            )}
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: 'w-8 h-8 ring-1 ring-[rgba(245,200,66,0.3)] hover:ring-[rgba(245,200,66,0.6)] transition-all',
+                },
+              }}
+            />
+          </div>
         </div>
       </div>
 

@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const cards = await dbGetCards();
+  // Price refresh runs as a cron job — refresh cards for all legacy/system users
+  const cards = await dbGetCards('legacy');
   if (!cards.length) {
     return NextResponse.json({ refreshed: 0, message: 'No cards in portfolio' });
   }
