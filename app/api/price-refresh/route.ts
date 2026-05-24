@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbGetCards, dbGetPriceHistory, dbCreateAlert, initSchema } from '@/lib/db';
+import { dbGetAllCards, dbGetPriceHistory, dbCreateAlert, initSchema } from '@/lib/db';
 import { setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 import { buildEbayQuery } from '@/lib/ebay-utils';
@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Price refresh runs as a cron job — refresh cards for all legacy/system users
-  const cards = await dbGetCards('legacy');
+  // Price refresh runs as a cron job — refresh ALL cards across all users
+  const cards = await dbGetAllCards();
   if (!cards.length) {
     return NextResponse.json({ refreshed: 0, message: 'No cards in portfolio' });
   }
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
 
   for (const card of cards) {
-    const query = buildEbayQuery(card.year, card.brand, card.player, card.variation);
+    const query = buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition);
     try {
       const params = new URLSearchParams({
         q:      query,

@@ -29,9 +29,9 @@ const FEATURES = [
     tag: 'TRACK',
     title: 'Live Portfolio Tracker',
     description:
-      "Every card's cost basis, current market value, and ROI — updated with real eBay sold-price data refreshed automatically.",
+      "Every card's cost basis, current market value, and ROI — updated with live eBay market data refreshed automatically.",
     bullets: [
-      'Live eBay sold-price data',
+      'Live eBay market pricing',
       'ROI calculated per card',
       'Sortable, filterable dashboard',
     ],
@@ -179,7 +179,9 @@ function FloatingCardMockup() {
       </div>
 
       {/* Stats strip below cards */}
-      <div className="flex items-center justify-center gap-6 mt-8">
+      <div className="flex flex-col items-center gap-3 mt-8">
+        <p className="text-[9px] text-chrome-700 uppercase tracking-widest font-display">Example portfolio</p>
+        <div className="flex items-center justify-center gap-6">
         {[
           { label: 'Portfolio Value', value: '$4,280', color: 'text-gold-400' },
           { label: 'Total ROI', value: '+34.2%', color: 'text-electric' },
@@ -190,6 +192,7 @@ function FloatingCardMockup() {
             <p className="text-[10px] text-chrome-600 uppercase tracking-widest font-display mt-0.5">{label}</p>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
@@ -307,6 +310,7 @@ export default function LandingPage() {
       {/* ── Signal ticker strip ──────────────────────────────────────────── */}
       <div className="border-y border-[#1E2D45] bg-[#060E1C] py-4 overflow-hidden">
         <div className="flex items-center justify-center gap-8 px-4 flex-wrap">
+          <span className="text-[9px] text-chrome-700 uppercase tracking-widest font-display flex-shrink-0">Sample signals</span>
           {[
             { label: 'PSA 10 Mahomes RC', signal: 'BUY', price: '$4,200', change: '+12.4%', icon: TrendingUp },
             { label: 'Luka Dončić Prizm', signal: 'HOLD', price: '$890', change: '+2.1%', icon: Minus },
@@ -339,10 +343,10 @@ export default function LandingPage() {
             Limited Availability
           </p>
           <h3 className="font-card text-3xl sm:text-4xl mb-3 tracking-widest uppercase">
-            <span className="title-gold">Join the first 100 collectors</span>
+            <span className="title-gold">Get updates as we build</span>
           </h3>
           <p className="text-slate-400 text-sm mb-10 font-sans leading-relaxed max-w-lg mx-auto">
-            Spots are limited during early access. Every member gets full access to all features from day one.
+            Drop your email to get notified about new features, improvements, and when we launch premium tiers.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-w-xl mx-auto text-left">
             {EARLY_ACCESS_PERKS.map((perk) => (
@@ -498,7 +502,10 @@ export default function LandingPage() {
             <span className="font-card text-base tracking-widest chrome-text select-none">CARDIQ</span>
           </div>
           <p className="text-chrome-700 text-xs uppercase tracking-widest">
-            © {new Date().getFullYear()} CardIQ. All rights reserved.
+            © {new Date().getFullYear()} CardIQ.{' '}
+            <Link href="/privacy" className="hover:text-gold-400 transition-colors">Privacy</Link>
+            {' · '}
+            <Link href="/terms" className="hover:text-gold-400 transition-colors">Terms</Link>
           </p>
           <Link
             href="/dashboard"

@@ -19,7 +19,7 @@ const INPUT_BASE =
 
 export default function ScanPage() {
   const router = useRouter();
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
 
   const [identifying, setIdentifying] = useState(false);
   const [identified, setIdentified] = useState<IdentifiedCard | null>(null);
@@ -121,6 +121,20 @@ export default function ScanPage() {
 
   function handleAddToPortfolio() {
     if (!identified) return;
+
+    // Duplicate detection
+    const duplicate = state.cards.find(
+      (c) =>
+        c.player.toLowerCase() === identified.player.toLowerCase() &&
+        c.year === identified.year &&
+        c.brand.toLowerCase() === identified.brand.toLowerCase() &&
+        (c.variation ?? '').toLowerCase() === (identified.variation ?? '').toLowerCase() &&
+        c.condition === condition,
+    );
+    if (duplicate && !window.confirm(`"${identified.player}" (${condition}) is already in your portfolio. Add again?`)) {
+      return;
+    }
+
     setAdding(true);
     const cardId = generateId();
     const card: Card = {
@@ -354,7 +368,7 @@ export default function ScanPage() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={handleAddToPortfolio}
-                disabled={!purchasePrice || adding}
+                disabled={adding}
                 className="btn-gold flex items-center gap-2 px-6 py-3 font-black text-sm uppercase tracking-widest"
               >
                 <PlusCircle size={15} />

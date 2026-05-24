@@ -180,7 +180,7 @@ export default function Dashboard() {
             href="/portfolio"
             className="text-xs text-electric hover:text-white transition-colors duration-200 uppercase tracking-widest font-display font-black"
           >
-            View all →
+            View all {cards.length > 6 ? `${cards.length} cards` : ''} →
           </Link>
         </div>
 

@@ -398,6 +398,11 @@ export default function IntelligencePage() {
 
       {/* ── Portfolio Risk Metrics — always visible when cards exist ─── */}
       {!isGenerating && <PortfolioRiskMetrics />}
+
+      {/* ── Disclaimer ───────────────────────────────────────────────── */}
+      <p className="text-[10px] text-chrome-700 font-display uppercase tracking-widest text-center pb-2">
+        For informational purposes only. Not financial advice. Sports card values can decrease. Past signals are not indicative of future results.
+      </p>
     </div>
   );
 }

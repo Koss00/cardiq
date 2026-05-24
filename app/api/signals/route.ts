@@ -160,6 +160,8 @@ export async function POST(req: NextRequest) {
 
   // ── DB cache — survives cold starts (in-memory cache does not) ────────────
   // Check before calling Claude. Any signal < 24h old is returned directly.
+  // playerStats / newsItems / priceHistory are NOT stored in card_signals,
+  // so we re-fetch them in parallel (they have their own caches and are cheap).
   if (!force) {
     await initSchema().catch(() => {});
     const recent = await dbGetRecentSignals(cardHash, 1).catch(() => []);
@@ -167,6 +169,20 @@ export async function POST(req: NextRequest) {
       const row = recent[0];
       const ageMs = row.generatedAt ? Date.now() - new Date(row.generatedAt).getTime() : Infinity;
       if (ageMs < 24 * 60 * 60 * 1000) {
+        const ebayQueryCache = buildEbayQuery(safeCard.year, safeCard.brand, safeCard.player, safeCard.variation, safeCard.condition);
+        const [cachedPlayerStats, cachedNewsItems, cachedPriceHistory] = await Promise.all([
+          fetchPlayerStats(safeCard.player, safeCard.sport).catch(() => null as PlayerStats | null),
+          fetchPlayerNews(safeCard.player, safeCard.sport).catch(() => [] as string[]),
+          dbGetPriceHistory(`history:${ebayQueryCache}`).catch(() => []),
+        ]);
+        const cachedEbayIntel = (() => {
+          const raw = getCachedEbay(`sold:${ebayQueryCache}`) as Array<{ price: number; listedAt?: string }> | null;
+          return raw ? buildEbayIntel(raw) : null;
+        })();
+        const cachedFactors = buildConfidenceFactors(
+          cachedPlayerStats, cachedNewsItems, cachedPriceHistory.length, safeCard, cachedEbayIntel,
+        );
+
         const dbSignal: CardSignal = {
           cardId:           row.cardId,
           player:           row.player,
@@ -185,6 +201,10 @@ export async function POST(req: NextRequest) {
           qualityScore:     row.qualityScore,
           qualityRationale: row.qualityRationale,
           generatedAt:      row.generatedAt ?? new Date().toISOString(),
+          playerStats:      cachedPlayerStats ?? undefined,
+          newsItems:        cachedNewsItems.length > 0 ? cachedNewsItems : undefined,
+          priceHistory:     cachedPriceHistory.length > 0 ? cachedPriceHistory : undefined,
+          confidenceFactors: cachedFactors,
         };
         setCachedSignal(cardHash, dbSignal); // warm in-memory for this instance's lifetime
         return new Response(
@@ -202,7 +222,7 @@ export async function POST(req: NextRequest) {
 
   const today      = new Date().toISOString().split('T')[0];
   const detail     = buildCardDetail(safeCard);
-  const ebayQuery  = buildEbayQuery(safeCard.year, safeCard.brand, safeCard.player, safeCard.variation);
+  const ebayQuery  = buildEbayQuery(safeCard.year, safeCard.brand, safeCard.player, safeCard.variation, safeCard.condition);
 
   await initSchema().catch(() => {});
 

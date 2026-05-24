@@ -14,6 +14,7 @@ export function buildEbayQuery(
   brand: string,
   player: string,
   variation?: string,
+  condition?: string,
 ): string {
   let varPart = (variation ?? '').trim();
 
@@ -32,7 +33,10 @@ export function buildEbayQuery(
     }
   }
 
-  return `${year} ${brand} ${player}${varPart ? ' ' + varPart : ''}`.replace(/\s{2,}/g, ' ').trim();
+  // Append grade for graded cards — omit 'Raw' as it hurts eBay keyword matching
+  const condPart = condition && condition !== 'Raw' ? ` ${condition}` : '';
+
+  return `${year} ${brand} ${player}${varPart ? ' ' + varPart : ''}${condPart}`.replace(/\s{2,}/g, ' ').trim();
 }
 
 export interface EbayIntel {

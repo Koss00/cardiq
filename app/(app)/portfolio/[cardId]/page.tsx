@@ -7,6 +7,7 @@ import {
   ArrowLeft, Edit2, Trash2, RefreshCw, Loader2, ExternalLink,
   Camera, ShieldCheck, X, Check,
 } from 'lucide-react';
+import { buildEbayQuery } from '@/lib/ebay-utils';
 import { useStore } from '@/lib/store';
 import { EbayListing } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
@@ -68,7 +69,7 @@ export default function CardDetailPage() {
   }, [card]);
 
   const ebayQuery = card
-    ? `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim()
+    ? buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition)
     : '';
 
   useEffect(() => {

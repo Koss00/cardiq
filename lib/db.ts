@@ -181,6 +181,13 @@ export async function dbGetCards(userId: string) {
   return rows.map(rowToCard);
 }
 
+export async function dbGetAllCards() {
+  const rows = await sql`
+    SELECT * FROM cards ORDER BY added_at DESC
+  `;
+  return rows.map(rowToCard);
+}
+
 export async function dbUpsertCard(card: CardRow) {
   await sql`
     INSERT INTO cards (
@@ -340,6 +347,7 @@ export async function dbSaveSignal(s: SignalRow): Promise<void> {
 export async function dbGetRecentSignals(cardHash: string, limit: number): Promise<SignalRow[]> {
   const rows = await sql`
     SELECT id, card_id, player, card_hash, signal, confidence, summary,
+           price_trend, player_context, scarcity_note, market_context,
            price_target, timeframe, wyckoff_regime, market_heat_score,
            ev_per_dollar, quality_score, quality_rationale,
            outcome_pct, outcome_correct, generated_at
@@ -356,6 +364,10 @@ export async function dbGetRecentSignals(cardHash: string, limit: number): Promi
     signal:           r.signal as 'BUY' | 'SELL' | 'HOLD',
     confidence:       r.confidence as number,
     summary:          r.summary as string,
+    priceTrend:       r.price_trend    as string | undefined,
+    playerContext:    r.player_context as string | undefined,
+    scarcityNote:     r.scarcity_note  as string | undefined,
+    marketContext:    r.market_context as string | undefined,
     priceTarget:      r.price_target != null ? parseFloat(r.price_target as string) : undefined,
     timeframe:        r.timeframe as string | undefined,
     wyckoffRegime:    r.wyckoff_regime as string | undefined,
