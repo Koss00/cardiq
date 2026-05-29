@@ -49,11 +49,11 @@ const DIMENSIONS = [
   { key: 'marketContext' as const, label: 'Market Context',     icon: Globe,     color: 'text-blue-300',   bg: 'bg-blue-400/[0.07]'   },
 ];
 
-const WYCKOFF_STYLES: Record<string, { label: string; classes: string }> = {
-  ACCUMULATION: { label: 'ACCUMULATION', classes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
-  MARKUP:       { label: 'MARKUP',       classes: 'text-blue-400   bg-blue-500/10   border-blue-500/30'   },
-  DISTRIBUTION: { label: 'DISTRIBUTION', classes: 'text-amber-400  bg-amber-500/10  border-amber-500/30'  },
-  MARKDOWN:     { label: 'MARKDOWN',     classes: 'text-red-400    bg-red-500/10    border-red-500/30'    },
+const WYCKOFF_STYLES: Record<string, { label: string; tooltip: string; classes: string }> = {
+  ACCUMULATION: { label: 'Buying Phase',   tooltip: 'Wyckoff Accumulation — smart money is building positions; early opportunity window', classes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
+  MARKUP:       { label: 'Uptrend',         tooltip: 'Wyckoff Markup — price is rising with momentum; demand exceeding supply',            classes: 'text-blue-400   bg-blue-500/10   border-blue-500/30'   },
+  DISTRIBUTION: { label: 'Sell Zone',       tooltip: 'Wyckoff Distribution — smart money is exiting; supply absorbing demand at highs',    classes: 'text-amber-400  bg-amber-500/10  border-amber-500/30'  },
+  MARKDOWN:     { label: 'Downtrend',       tooltip: 'Wyckoff Markdown — price declining; supply exceeding demand',                        classes: 'text-red-400    bg-red-500/10    border-red-500/30'    },
 };
 
 interface Props {
@@ -96,7 +96,10 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
                   {signal.signal}
                 </span>
                 {!streaming && signal.wyckoffRegime && WYCKOFF_STYLES[signal.wyckoffRegime] && (
-                  <span className={`text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm border ${WYCKOFF_STYLES[signal.wyckoffRegime].classes}`}>
+                  <span
+                    className={`text-[9px] font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm border cursor-help ${WYCKOFF_STYLES[signal.wyckoffRegime].classes}`}
+                    title={WYCKOFF_STYLES[signal.wyckoffRegime].tooltip}
+                  >
                     {WYCKOFF_STYLES[signal.wyckoffRegime].label}
                   </span>
                 )}
@@ -311,8 +314,11 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
             </div>
           )}
           {!streaming && signal.evPerDollar !== undefined && (
-            <div className="flex items-center gap-1 text-xs">
-              <span className="text-chrome-500 font-display font-black uppercase tracking-widest">EV:</span>
+            <div
+              className="flex items-center gap-1 text-xs cursor-help"
+              title="Expected Return — projected price move % relative to current value based on target price and market data"
+            >
+              <span className="text-chrome-500 font-display font-black uppercase tracking-widest">Expected Return:</span>
               <span className={`font-display font-black ${signal.evPerDollar >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {signal.evPerDollar >= 0 ? '+' : ''}{(signal.evPerDollar * 100).toFixed(1)}%
               </span>

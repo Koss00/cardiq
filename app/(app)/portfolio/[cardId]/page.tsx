@@ -5,12 +5,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Edit2, Trash2, RefreshCw, Loader2, ExternalLink,
-  Camera, ShieldCheck, X, Check,
+  Camera, ShieldCheck, X, Check, ChevronDown,
 } from 'lucide-react';
 import { buildEbayQuery } from '@/lib/ebay-utils';
 import { useStore } from '@/lib/store';
 import { EbayListing } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
+import { Condition, Sport } from '@/types';
 import PriceHistoryChart from '@/components/portfolio/PriceHistoryChart';
 import SignalCard from '@/components/intelligence/SignalCard';
 import type { PsaCertData } from '@/app/api/psa-pop/route';
@@ -56,7 +57,16 @@ export default function CardDetailPage() {
   const [showEdit, setShowEdit]   = useState(false);
   const [editPaid, setEditPaid]   = useState('');
   const [editValue, setEditValue] = useState('');
+  const [editPlayer, setEditPlayer]         = useState('');
+  const [editYear, setEditYear]             = useState('');
+  const [editBrand, setEditBrand]           = useState('');
+  const [editVariation, setEditVariation]   = useState('');
+  const [editCondition, setEditCondition]   = useState<Condition>('Raw');
+  const [editSport, setEditSport]           = useState<Sport>('Baseball');
   const [showRemove, setShowRemove] = useState(false);
+
+  const CONDITIONS: Condition[] = ['Raw', 'PSA 10', 'PSA 9', 'PSA 8', 'PSA 7', 'BGS 9.5', 'BGS 9', 'SGC 10'];
+  const SPORTS: Sport[]         = ['Baseball', 'Basketball', 'Football', 'Hockey', 'Soccer', 'Golf'];
 
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,16 +144,30 @@ export default function CardDetailPage() {
     if (!card) return;
     setEditPaid(String(card.purchasePrice));
     setEditValue(String(card.currentValue));
+    setEditPlayer(card.player);
+    setEditYear(String(card.year));
+    setEditBrand(card.brand);
+    setEditVariation(card.variation ?? '');
+    setEditCondition(card.condition as Condition);
+    setEditSport(card.sport as Sport);
     setShowEdit(true);
   }
 
   function saveEdit() {
     if (!card) return;
+    const updates: Partial<typeof card> = {};
     const pp = parseFloat(editPaid);
     const cv = parseFloat(editValue);
-    if (!isNaN(pp) && !isNaN(cv)) {
-      dispatch({ type: 'UPDATE_CARD', id: card.id, updates: { purchasePrice: pp, currentValue: cv } });
-    }
+    const yr = parseInt(editYear);
+    if (!isNaN(pp))        updates.purchasePrice = pp;
+    if (!isNaN(cv))        updates.currentValue  = cv;
+    if (editPlayer.trim()) updates.player        = editPlayer.trim();
+    if (!isNaN(yr))        updates.year          = yr;
+    if (editBrand.trim())  updates.brand         = editBrand.trim();
+    updates.variation  = editVariation.trim() || undefined;
+    updates.condition  = editCondition;
+    updates.sport      = editSport;
+    dispatch({ type: 'UPDATE_CARD', id: card.id, updates });
     setShowEdit(false);
   }
 
@@ -416,10 +440,10 @@ export default function CardDetailPage() {
 
       {/* ── Edit modal ──────────────────────────────────────────────── */}
       {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#060E1C]/90 backdrop-blur-md">
-          <div className="chrome-panel w-full max-w-sm p-7 space-y-6 border border-[#1E2D45]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#060E1C]/90 backdrop-blur-md overflow-y-auto">
+          <div className="chrome-panel w-full max-w-md p-7 space-y-5 border border-[#1E2D45] my-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-card text-xl text-white uppercase tracking-wide">Edit Values</h2>
+              <h2 className="font-card text-xl text-white uppercase tracking-wide">Edit Card</h2>
               <button
                 onClick={() => setShowEdit(false)}
                 className="text-chrome-600 hover:text-chrome-200 transition-colors duration-200 cursor-pointer p-1"
@@ -428,26 +452,62 @@ export default function CardDetailPage() {
                 <X size={16} />
               </button>
             </div>
-            <div className="space-y-4">
-              {[
-                { label: 'Purchase Price ($)', id: 'editPaid',  val: editPaid,  set: setEditPaid  },
-                { label: 'Current Value ($)',  id: 'editValue', val: editValue, set: setEditValue  },
-              ].map(({ label, id, val, set }) => (
-                <div key={id}>
-                  <label htmlFor={id} className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-2 block">
-                    {label}
-                  </label>
-                  <input
-                    id={id}
-                    type="number" min="0" step="0.01"
-                    value={val}
-                    onChange={(e) => set(e.target.value)}
-                    className={INPUT_BASE}
-                  />
+
+            {/* Card identity */}
+            <p className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-600 pt-1">Card Identity</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Player</label>
+                <input type="text" value={editPlayer} onChange={(e) => setEditPlayer(e.target.value)} className={INPUT_BASE} />
+              </div>
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Year</label>
+                <input type="number" value={editYear} onChange={(e) => setEditYear(e.target.value)} className={INPUT_BASE} />
+              </div>
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Brand / Set</label>
+                <input type="text" value={editBrand} onChange={(e) => setEditBrand(e.target.value)} className={INPUT_BASE} />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Variation (optional)</label>
+                <input type="text" value={editVariation} onChange={(e) => setEditVariation(e.target.value)} className={INPUT_BASE} placeholder="e.g. Silver Refractor" />
+              </div>
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Condition</label>
+                <div className="relative">
+                  <select value={editCondition} onChange={(e) => setEditCondition(e.target.value as Condition)}
+                    className={`${INPUT_BASE} appearance-none pr-8`}>
+                    {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-chrome-500 pointer-events-none" />
                 </div>
-              ))}
+              </div>
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Sport</label>
+                <div className="relative">
+                  <select value={editSport} onChange={(e) => setEditSport(e.target.value as Sport)}
+                    className={`${INPUT_BASE} appearance-none pr-8`}>
+                    {SPORTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-chrome-500 pointer-events-none" />
+                </div>
+              </div>
             </div>
-            <div className="flex gap-3 pt-1">
+
+            {/* Prices */}
+            <p className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-600 pt-1">Pricing</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Purchase Price ($)</label>
+                <input type="number" min="0" step="0.01" value={editPaid} onChange={(e) => setEditPaid(e.target.value)} className={INPUT_BASE} />
+              </div>
+              <div>
+                <label className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500 mb-1.5 block">Current Value ($)</label>
+                <input type="number" min="0" step="0.01" value={editValue} onChange={(e) => setEditValue(e.target.value)} className={INPUT_BASE} />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowEdit(false)}
                 className="flex-1 py-2.5 rounded-md bg-[#111D33] border border-[rgba(192,200,216,0.12)] text-chrome-400 text-[10px] font-display font-black uppercase tracking-widest transition-colors duration-200 cursor-pointer hover:text-chrome-200"
@@ -458,7 +518,7 @@ export default function CardDetailPage() {
                 onClick={saveEdit}
                 className="flex-1 py-2.5 rounded-sm btn-gold text-[10px] font-display font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
               >
-                <Check size={11} />Save
+                <Check size={11} />Save Changes
               </button>
             </div>
           </div>

@@ -118,23 +118,23 @@ export default function PortfolioRiskMetrics() {
       {metrics && !insufficientData && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
-            label="Kelly Allocation"
+            label="Position Sizing"
             value={fmtKelly(metrics.portfolioKelly)}
-            sub="optimal bet fraction"
+            sub="suggested portfolio % (Kelly)"
             color={kellyColor(metrics.portfolioKelly)}
             icon={Target}
           />
           <MetricCard
-            label="Sharpe Ratio"
+            label="Risk-Adj. Return"
             value={fmtSharpe(metrics.portfolioSharpe)}
-            sub="risk-adj. return"
+            sub="reward per unit of risk (Sharpe)"
             color={sharpeColor(metrics.portfolioSharpe)}
             icon={BarChart2}
           />
           <MetricCard
-            label="Max Drawdown"
+            label="Worst Drop"
             value={fmtDrawdown(metrics.portfolioMaxDrawdown)}
-            sub="peak-to-trough"
+            sub="biggest peak-to-trough loss"
             color={drawdownColor(metrics.portfolioMaxDrawdown)}
             icon={TrendingDown}
           />

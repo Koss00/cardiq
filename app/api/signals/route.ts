@@ -120,7 +120,7 @@ function buildConfidenceFactors(
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'signals', 5);
+  const rl = await checkRateLimit(ip, 'signals', 5);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   let body: { card?: Card; force?: boolean };

@@ -503,6 +503,8 @@ export default function LandingPage() {
           </div>
           <p className="text-chrome-700 text-xs uppercase tracking-widest">
             © {new Date().getFullYear()} CardIQ.{' '}
+            <Link href="/pricing" className="hover:text-gold-400 transition-colors">Pricing</Link>
+            {' · '}
             <Link href="/privacy" className="hover:text-gold-400 transition-colors">Privacy</Link>
             {' · '}
             <Link href="/terms" className="hover:text-gold-400 transition-colors">Terms</Link>

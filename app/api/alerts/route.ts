@@ -10,7 +10,7 @@ async function ensureSchema() {
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'alerts', 30);
+  const rl = await checkRateLimit(ip, 'alerts', 30);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   try {

@@ -36,7 +36,7 @@ function writeCache(cache: Record<string, PsaEntry>) {
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'psa-pop', 20);
+  const rl = await checkRateLimit(ip, 'psa-pop', 20);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   const rawCert = new URL(req.url).searchParams.get('cert')?.trim();

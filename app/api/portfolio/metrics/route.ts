@@ -19,7 +19,7 @@ async function ensureSchema() {
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'portfolio-metrics', 20);
+  const rl = await checkRateLimit(ip, 'portfolio-metrics', 20);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   if (cachedMetrics && Date.now() < cacheExpiresAt) {

@@ -9,7 +9,7 @@ const MAX_BATCH = 20;
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'signals-prefetch', 10);
+  const rl = await checkRateLimit(ip, 'signals-prefetch', 10);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   let body: { cards?: Card[] };

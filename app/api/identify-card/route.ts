@@ -18,7 +18,7 @@ function normalizeMediaType(raw: string): AnthropicImageMediaType {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'identify-card', 10);
+  const rl = await checkRateLimit(ip, 'identify-card', 10);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   try {

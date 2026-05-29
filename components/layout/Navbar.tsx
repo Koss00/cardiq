@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, ScanLine, Brain, Layers } from 'lucide-react';
+import { BarChart3, ScanLine, Brain, Layers, Settings } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/lib/store';
 import { formatCurrency, calcRoi } from '@/lib/utils';
@@ -12,6 +12,7 @@ const NAV = [
   { href: '/scan',         label: 'Scan',         icon: ScanLine  },
   { href: '/portfolio',    label: 'Portfolio',     icon: Layers    },
   { href: '/intelligence', label: 'Intelligence',  icon: Brain     },
+  { href: '/settings',     label: 'Settings',      icon: Settings  },
 ];
 
 export default function Navbar() {

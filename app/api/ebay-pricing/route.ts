@@ -8,7 +8,7 @@ const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'ebay-pricing', 20);
+  const rl = await checkRateLimit(ip, 'ebay-pricing', 20);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   const { searchParams } = new URL(req.url);

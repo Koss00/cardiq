@@ -8,7 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const ip = getClientIp(req);
-  const rl = checkRateLimit(ip, 'alerts-dismiss', 60);
+  const rl = await checkRateLimit(ip, 'alerts-dismiss', 60);
   if (!rl.allowed) return rateLimitResponse(rl.resetIn);
 
   const { id: rawId } = await params;

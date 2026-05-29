@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlusCircle, RotateCcw, Camera, CheckCircle, X } from 'lucide-react';
+import { PlusCircle, RotateCcw, Camera, CheckCircle, X, PenLine, ScanLine } from 'lucide-react';
 import PhotoUpload from '@/components/scan/PhotoUpload';
 import CardResult from '@/components/scan/CardResult';
 import { useStore } from '@/lib/store';
@@ -14,12 +14,31 @@ const CONDITIONS: Condition[] = [
   'Raw', 'PSA 10', 'PSA 9', 'PSA 8', 'PSA 7', 'BGS 9.5', 'BGS 9', 'SGC 10',
 ];
 
+const SPORTS: Sport[] = ['Baseball', 'Basketball', 'Football', 'Hockey', 'Soccer', 'Golf'];
+
 const INPUT_BASE =
   'w-full bg-[#111D33] border border-[#1E2D45] text-white rounded-md px-4 py-3 text-sm focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/20 transition-all duration-200 placeholder-chrome-600';
+
+const SELECT_BASE =
+  'w-full bg-[#111D33] border border-[#1E2D45] text-white rounded-md px-4 py-3 text-sm focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/20 transition-all duration-200';
 
 export default function ScanPage() {
   const router = useRouter();
   const { state, dispatch } = useStore();
+
+  const [mode, setMode] = useState<'scan' | 'manual'>('scan');
+
+  // Manual form state
+  const [manualPlayer, setManualPlayer]       = useState('');
+  const [manualYear, setManualYear]           = useState('');
+  const [manualBrand, setManualBrand]         = useState('');
+  const [manualNumber, setManualNumber]       = useState('');
+  const [manualVariation, setManualVariation] = useState('');
+  const [manualSport, setManualSport]         = useState<Sport>('Baseball');
+  const [manualCondition, setManualCondition] = useState<Condition>('Raw');
+  const [manualPurchase, setManualPurchase]   = useState('');
+  const [manualValue, setManualValue]         = useState('');
+  const [manualFetching, setManualFetching]   = useState(false);
 
   const [identifying, setIdentifying] = useState(false);
   const [identified, setIdentified] = useState<IdentifiedCard | null>(null);
@@ -77,6 +96,29 @@ export default function ScanPage() {
     } finally {
       setIdentifying(false);
     }
+  }
+
+  async function handleManualAdd() {
+    if (!manualPlayer.trim() || !manualYear || !manualBrand.trim()) return;
+    setManualFetching(true);
+    const fake: IdentifiedCard = {
+      player:     manualPlayer.trim(),
+      year:       parseInt(manualYear),
+      brand:      manualBrand.trim(),
+      cardNumber: manualNumber.trim() || undefined,
+      variation:  manualVariation.trim() || undefined,
+      sport:      manualSport,
+      condition:  manualCondition,
+      confidence: 100,
+      description: `${manualYear} ${manualBrand} ${manualPlayer.trim()}`,
+    };
+    // Set condition/sport from manual form so portfolio form syncs
+    setCondition(manualCondition);
+    if (manualPurchase) setPurchasePrice(manualPurchase);
+    setIdentified(fake);
+    fetchEbayPrices(fake);
+    setManualFetching(false);
+    setMode('scan'); // switch to result view
   }
 
   async function fetchEbayPrices(card: IdentifiedCard) {
@@ -171,18 +213,144 @@ export default function ScanPage() {
     setPurchasePrice('');
     setCurrentValue('');
     setCardPhoto(null);
+    setManualPlayer('');
+    setManualYear('');
+    setManualBrand('');
+    setManualNumber('');
+    setManualVariation('');
+    setManualSport('Baseball');
+    setManualCondition('Raw');
+    setManualPurchase('');
+    setManualValue('');
   }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 fade-in-up">
       <div>
-        <h1 className="section-accent font-card text-5xl uppercase tracking-widest"><span className="title-gold">Scan a Card</span></h1>
+        <h1 className="section-accent font-card text-5xl uppercase tracking-widest"><span className="title-gold">Add a Card</span></h1>
         <p className="text-slate-500 mt-2 text-sm font-sans leading-relaxed">
-          Upload a photo and AI will identify your card and pull live eBay pricing.
+          Scan a photo for AI identification, or enter card details manually.
         </p>
       </div>
 
+      {/* Mode toggle */}
       {!identified && !identifying && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMode('scan')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer ${
+              mode === 'scan'
+                ? 'bg-[rgba(245,200,66,0.12)] border border-[rgba(245,200,66,0.35)] text-gold-400'
+                : 'bg-[#111D33] border border-[#1E2D45] text-chrome-500 hover:text-chrome-200'
+            }`}
+          >
+            <ScanLine size={12} /> AI Scan
+          </button>
+          <button
+            onClick={() => setMode('manual')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-display font-black uppercase tracking-widest transition-all duration-200 cursor-pointer ${
+              mode === 'manual'
+                ? 'bg-[rgba(245,200,66,0.12)] border border-[rgba(245,200,66,0.35)] text-gold-400'
+                : 'bg-[#111D33] border border-[#1E2D45] text-chrome-500 hover:text-chrome-200'
+            }`}
+          >
+            <PenLine size={12} /> Manual Entry
+          </button>
+        </div>
+      )}
+
+      {/* Manual entry form */}
+      {!identified && !identifying && mode === 'manual' && (
+        <div className="chrome-panel p-6 space-y-5">
+          <h3 className="font-display font-black text-white uppercase tracking-widest text-sm">Card Details</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Player Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text" placeholder="e.g. Patrick Mahomes"
+                value={manualPlayer} onChange={(e) => setManualPlayer(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Year <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="number" placeholder="e.g. 2023" min="1900" max={new Date().getFullYear() + 1}
+                value={manualYear} onChange={(e) => setManualYear(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Brand / Set <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text" placeholder="e.g. Topps Prizm"
+                value={manualBrand} onChange={(e) => setManualBrand(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Card # (optional)
+              </label>
+              <input
+                type="text" placeholder="e.g. #87"
+                value={manualNumber} onChange={(e) => setManualNumber(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Variation (optional)
+              </label>
+              <input
+                type="text" placeholder="e.g. Silver Refractor"
+                value={manualVariation} onChange={(e) => setManualVariation(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">Sport</label>
+              <select value={manualSport} onChange={(e) => setManualSport(e.target.value as Sport)} className={SELECT_BASE}>
+                {SPORTS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">Condition</label>
+              <select value={manualCondition} onChange={(e) => setManualCondition(e.target.value as Condition)} className={SELECT_BASE}>
+                {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-chrome-500 mb-2 font-display font-black uppercase tracking-widest">
+                Purchase Price ($)
+              </label>
+              <input
+                type="number" min="0" step="0.01" placeholder="0.00"
+                value={manualPurchase} onChange={(e) => setManualPurchase(e.target.value)}
+                className={INPUT_BASE}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={handleManualAdd}
+              disabled={manualFetching || !manualPlayer.trim() || !manualYear || !manualBrand.trim()}
+              className="btn-gold flex items-center gap-2 px-6 py-3 font-black text-sm uppercase tracking-widest disabled:opacity-40"
+            >
+              <PlusCircle size={15} />
+              {manualFetching ? 'Loading...' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!identified && !identifying && mode === 'scan' && (
         <>
           <PhotoUpload onImage={handleImage} />
 
