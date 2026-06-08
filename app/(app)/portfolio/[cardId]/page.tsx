@@ -72,8 +72,12 @@ export default function CardDetailPage() {
 
   useEffect(() => {
     if (!card) return;
-    const photo = localStorage.getItem(`cardiq:photo:${card.id}`);
-    if (photo) setCardPhoto(photo);
+    if (card.imageUrl) {
+      setCardPhoto(card.imageUrl);
+    } else {
+      const stored = localStorage.getItem(`cardiq:photo:${card.id}`);
+      if (stored) setCardPhoto(stored);
+    }
     const cert = localStorage.getItem(`cardiq:cert:${card.id}`);
     if (cert) setCertInput(cert);
   }, [card]);
@@ -82,12 +86,14 @@ export default function CardDetailPage() {
     ? buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition)
     : '';
 
+  const playerParam = card ? `&player=${encodeURIComponent(card.player)}` : '';
+
   useEffect(() => {
     if (!ebayQuery) return;
     setEbayLoading(true);
     Promise.all([
-      fetch(`/api/ebay-pricing?q=${encodeURIComponent(ebayQuery)}`).then((r) => r.json()),
-      fetch(`/api/ebay-active?q=${encodeURIComponent(ebayQuery)}`).then((r) => r.json()),
+      fetch(`/api/ebay-pricing?q=${encodeURIComponent(ebayQuery)}${playerParam}`).then((r) => r.json()),
+      fetch(`/api/ebay-active?q=${encodeURIComponent(ebayQuery)}${playerParam}`).then((r) => r.json()),
     ])
       .then(([sold, active]) => {
         setSoldListings(sold.listings ?? []);
@@ -95,13 +101,13 @@ export default function CardDetailPage() {
       })
       .catch(() => {})
       .finally(() => setEbayLoading(false));
-  }, [ebayQuery]);
+  }, [ebayQuery, playerParam]);
 
   const refreshPrice = useCallback(async () => {
     if (!card) return;
     setRefreshing(true);
     try {
-      const res  = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(ebayQuery)}`);
+      const res  = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(ebayQuery)}${playerParam}`);
       const data = await res.json();
       if (data.listings?.length > 0) {
         const prices: number[] = data.listings.map((l: EbayListing) => l.price);
@@ -118,13 +124,25 @@ export default function CardDetailPage() {
   }, [card, ebayQuery, dispatch]);
 
   function handlePhotoFile(file: File) {
+    // Show preview immediately
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const url = e.target?.result as string;
-      localStorage.setItem(`cardiq:photo:${card!.id}`, url);
-      setCardPhoto(url);
-    };
+    reader.onload = (e) => setCardPhoto(e.target?.result as string ?? null);
     reader.readAsDataURL(file);
+    // Upload to Blob and persist
+    void (async () => {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('cardId', card!.id);
+        const up = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+        if (up.ok) {
+          const { url } = await up.json() as { url: string };
+          dispatch({ type: 'UPDATE_CARD', id: card!.id, updates: { imageUrl: url } });
+          setCardPhoto(url);
+          localStorage.removeItem(`cardiq:photo:${card!.id}`);
+        }
+      } catch { /* silent — local preview still shows */ }
+    })();
   }
 
   async function lookupPsa() {

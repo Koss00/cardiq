@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Trash2, RefreshCw, Loader2, ExternalLink, Camera } from 'lucide-react';
 import { Card, CardSignal, EbayListing, SignalType } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
+import { buildEbayQuery } from '@/lib/ebay-utils';
 import { useStore } from '@/lib/store';
 import CardSilhouette from './CardSilhouette';
 import PriceSparkline from '@/components/intelligence/PriceSparkline';
@@ -81,25 +82,59 @@ export default function TradingCard({ card, signal, cardSignal }: Props) {
   if (parallel) details.push({ label: 'Parallel',  value: parallel });
 
   useEffect(() => {
+    if (card.imageUrl) {
+      // Card already has a cloud URL — use it directly
+      setCardPhoto(card.imageUrl);
+      return;
+    }
+    // Legacy: check localStorage and silently migrate to Blob in the background
     const stored = localStorage.getItem(`cardiq:photo:${card.id}`);
-    if (stored) setCardPhoto(stored);
-  }, [card.id]);
+    if (!stored) return;
+    setCardPhoto(stored); // show immediately while upload runs
+    void (async () => {
+      try {
+        const res  = await fetch(stored); // fetch the data URL as a blob
+        const blob = await res.blob();
+        const fd   = new FormData();
+        fd.append('file', blob, 'card.jpg');
+        fd.append('cardId', card.id);
+        const up = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+        if (up.ok) {
+          const { url } = await up.json() as { url: string };
+          dispatch({ type: 'UPDATE_CARD', id: card.id, updates: { imageUrl: url } });
+          localStorage.removeItem(`cardiq:photo:${card.id}`); // clean up after successful migration
+        }
+      } catch { /* best-effort — keep showing localStorage photo if upload fails */ }
+    })();
+  }, [card.id, card.imageUrl, dispatch]);
 
   function handlePhotoFile(file: File) {
+    // Show preview immediately via base64
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      localStorage.setItem(`cardiq:photo:${card.id}`, dataUrl);
-      setCardPhoto(dataUrl);
-    };
+    reader.onload = (e) => setCardPhoto(e.target?.result as string ?? null);
     reader.readAsDataURL(file);
+    // Upload to Blob in background, then persist URL to card
+    void (async () => {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('cardId', card.id);
+        const up = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+        if (up.ok) {
+          const { url } = await up.json() as { url: string };
+          dispatch({ type: 'UPDATE_CARD', id: card.id, updates: { imageUrl: url } });
+          setCardPhoto(url); // switch from base64 preview to stable cloud URL
+          localStorage.removeItem(`cardiq:photo:${card.id}`);
+        }
+      } catch { /* silent — local preview still shows */ }
+    })();
   }
 
   const refreshPrice = useCallback(async () => {
     setRefreshing(true);
-    const query = `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim();
+    const query = buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition);
     try {
-      const res  = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(query)}`);
+      const res  = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(query)}&player=${encodeURIComponent(card.player)}`);
       const data = await res.json();
       if (data.listings?.length > 0) {
         const prices: number[] = data.listings.map((l: EbayListing) => l.price);
@@ -112,7 +147,7 @@ export default function TradingCard({ card, signal, cardSignal }: Props) {
   }, [card.id, card.year, card.brand, card.player, card.variation, dispatch]);
 
   function handleRemove() {
-    localStorage.removeItem(`cardiq:photo:${card.id}`);
+    localStorage.removeItem(`cardiq:photo:${card.id}`); // clean up any legacy localStorage entry
     dispatch({ type: 'REMOVE_CARD', id: card.id });
   }
 

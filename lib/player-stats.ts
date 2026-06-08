@@ -1,5 +1,12 @@
 import type { PlayerStats, PlayerStat } from '@/types';
 import { getCachedStats, setCachedStats } from './cache';
+import { dbGetStatsCache, dbSetStatsCache, initSchema } from './db';
+
+// DB TTL for stats: 12 hours — balances freshness vs. BallDontLie rate limits.
+// In-memory TTL (cache.ts) is 24h; DB is the persistent warm layer between cold starts.
+const STATS_DB_TTL_MS = 12 * 60 * 60 * 1000;
+// MLB roster is big (~1000 entries) — cache for 24h to avoid re-fetching on every cold start.
+const ROSTER_DB_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Players confirmed active — never label as historical regardless of roster lookup.
 // Offseason players won't appear in active-roster endpoints but are NOT retired.
@@ -31,7 +38,7 @@ const HARDCODED_FALLBACK_STATS: Record<string, PlayerStats> = {
       { label: 'YDS', value: '3876' },
       { label: 'TD',  value: '26'   },
       { label: 'INT', value: '11'   },
-      { label: 'QBR', value: '95.7' },
+      { label: 'RTG', value: '97.4' },
     ],
     source: 'Cached',
     knownActive: true,
@@ -42,9 +49,9 @@ const HARDCODED_FALLBACK_STATS: Record<string, PlayerStats> = {
     team: 'San Antonio Spurs',
     season: '2024-25 SEASON (cached)',
     stats: [
-      { label: 'PPG', value: '24.3' },
-      { label: 'RPG', value: '10.7' },
-      { label: 'APG', value: '3.9'  },
+      { label: 'PPG', value: '21.4' },
+      { label: 'RPG', value: '10.6' },
+      { label: 'APG', value: '3.8'  },
       { label: 'BPG', value: '3.6'  },
     ],
     source: 'Cached',
@@ -72,22 +79,52 @@ interface MlbPerson { id: number; fullName: string }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
+// Hard cap on external API calls — prevents Vercel function timeouts when
+// sports APIs are slow or unresponsive. Falls back to hardcoded stats if needed.
+const STATS_FETCH_TIMEOUT_MS = 5_000;
+
 export async function fetchPlayerStats(playerName: string, sport: string): Promise<PlayerStats | null> {
   const cacheKey = `stats:${sport}:${playerName.toLowerCase()}`;
+
+  // 1. In-memory cache (fast, dies on cold start)
   const cached = getCachedStats(cacheKey);
   if (cached) {
-    console.log(`[player-stats] cache hit: ${playerName} (${sport})`);
+    console.log(`[player-stats] in-memory cache hit: ${playerName} (${sport})`);
     return cached as PlayerStats;
+  }
+
+  // 2. DB cache (persistent across cold starts — checked before hitting BallDontLie/ESPN)
+  try {
+    await initSchema().catch(() => {});
+    const dbCached = await dbGetStatsCache(cacheKey, STATS_DB_TTL_MS);
+    if (dbCached) {
+      console.log(`[player-stats] DB cache hit: ${playerName} (${sport})`);
+      setCachedStats(cacheKey, dbCached); // warm in-memory for this instance
+      return dbCached as PlayerStats;
+    }
+  } catch {
+    // DB unavailable — fall through to live APIs
   }
 
   let stats: PlayerStats | null = null;
   try {
-    if      (sport === 'Baseball')   stats = await fetchMlbStats(playerName);
-    else if (sport === 'Basketball') stats = await fetchNbaStats(playerName);
-    else if (sport === 'Football')   stats = await fetchNflStats(playerName);
-    else if (sport === 'Hockey')     stats = await fetchNhlStats(playerName);
-    else if (sport === 'Soccer')     stats = await fetchSoccerStats(playerName);
-    else if (sport === 'Golf')       stats = await fetchGolfStats(playerName);
+    const fetchWork = async () => {
+      if      (sport === 'Baseball')   return fetchMlbStats(playerName);
+      else if (sport === 'Basketball') return fetchNbaStats(playerName);
+      else if (sport === 'Football')   return fetchNflStats(playerName);
+      else if (sport === 'Hockey')     return fetchNhlStats(playerName);
+      else if (sport === 'Soccer')     return fetchSoccerStats(playerName);
+      else if (sport === 'Golf')       return fetchGolfStats(playerName);
+      return null;
+    };
+
+    stats = await Promise.race([
+      fetchWork(),
+      new Promise<null>((resolve) => setTimeout(() => {
+        console.warn(`[player-stats] timeout (${STATS_FETCH_TIMEOUT_MS}ms) for "${playerName}" (${sport})`);
+        resolve(null);
+      }, STATS_FETCH_TIMEOUT_MS)),
+    ]);
   } catch (err) {
     console.error(`[player-stats] ${sport} failed for "${playerName}":`, err);
   }
@@ -101,7 +138,10 @@ export async function fetchPlayerStats(playerName: string, sport: string): Promi
     }
   }
 
-  if (stats) setCachedStats(cacheKey, stats);
+  if (stats) {
+    setCachedStats(cacheKey, stats);
+    dbSetStatsCache(cacheKey, stats).catch(() => {}); // non-blocking — never fail signal gen
+  }
   return stats;
 }
 
@@ -130,23 +170,41 @@ function nameMatch(rosterName: string, query: string): boolean {
 
 // ─── MLB ─────────────────────────────────────────────────────────────────────
 
+const MLB_ROSTER_DB_KEY = 'roster:mlb:2026';
+
 async function getMlbRoster(): Promise<MlbPerson[]> {
+  // 1. In-memory cache (1h TTL — fast for warm instances)
   if (mlbRosterCache && Date.now() - mlbRosterCache.fetchedAt < 3_600_000) {
     return mlbRosterCache.people;
   }
-  // gameType=R = regular season active roster only
+
+  // 2. DB cache — prevents re-fetching ~1000 players on every cold start
+  try {
+    const dbRoster = await dbGetStatsCache(MLB_ROSTER_DB_KEY, ROSTER_DB_TTL_MS);
+    if (dbRoster) {
+      const people = dbRoster as MlbPerson[];
+      mlbRosterCache = { people, fetchedAt: Date.now() };
+      console.log(`[player-stats] MLB roster: ${people.length} players from DB cache`);
+      return people;
+    }
+  } catch {
+    // DB unavailable — fall through to live fetch
+  }
+
+  // 3. Live fetch
   const res = await fetch(
     'https://statsapi.mlb.com/api/v1/sports/1/players?season=2026&gameType=R',
     { next: { revalidate: 0 } }
   );
   if (!res.ok) {
     console.error('[player-stats] MLB roster HTTP', res.status);
-    return [];
+    return mlbRosterCache?.people ?? []; // return stale cache if available
   }
   const data = await res.json() as { people?: MlbPerson[] };
   const people = data.people ?? [];
   mlbRosterCache = { people, fetchedAt: Date.now() };
-  console.log(`[player-stats] MLB roster: ${people.length} active players`);
+  console.log(`[player-stats] MLB roster: ${people.length} active players fetched`);
+  dbSetStatsCache(MLB_ROSTER_DB_KEY, people).catch(() => {}); // non-blocking
   return people;
 }
 
@@ -339,7 +397,7 @@ async function fetchNbaViaBallDontLie(playerName: string, apiKey: string): Promi
   console.log(`[player-stats] BallDontLie: found ${player.first_name} ${player.last_name} id=${player.id}`);
 
   // 2024 = 2024-25 season (most recently completed), 2025 = 2025-26 (current/just finished)
-  for (const season of [2024, 2025, 2023]) {
+  for (const season of [2025, 2024, 2023]) {
     // BallDontLie v1 season_averages uses player_ids[] (array param), not player_id
     const [avgRes, recentRes] = await Promise.all([
       fetch(
@@ -707,7 +765,9 @@ async function fetchNhlStats(playerName: string): Promise<PlayerStats | null> {
 
   if (entries.length === 0) return null;
 
-  const isRetired = !player.teamAbbrev;
+  // Only mark as retired if no team AND not in our confirmed-active list.
+  // Players in free agency or the offseason may have no teamAbbrev but are still active.
+  const isRetired = !player.teamAbbrev && !KNOWN_ACTIVE.has(norm(playerName));
   console.log(`[player-stats] NHL: ${entries.length} stats for ${player.name} (${seasonLabel})`);
   return {
     playerName: player.name,

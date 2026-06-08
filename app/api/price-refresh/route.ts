@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbGetAllCards, dbGetPriceHistory, dbCreateAlert, initSchema } from '@/lib/db';
+import { dbGetAllCards, dbGetPriceHistory, dbCreateAlert, dbSavePortfolioSnapshot, initSchema, dbSetEbayCache } from '@/lib/db';
+import { sendPriceAlertEmail } from '@/lib/email';
 import { setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
-import { buildEbayQuery } from '@/lib/ebay-utils';
+import { buildEbayQuery, fetchFindingSold } from '@/lib/ebay-utils';
 
 const BROWSE_API          = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 const ALERT_THRESHOLD_PCT = 10;
@@ -33,44 +34,62 @@ export async function POST(req: NextRequest) {
   let refreshed = 0;
   const errors: string[] = [];
 
+  const appId = process.env.EBAY_APP_ID ?? '';
+
   for (const card of cards) {
     const query = buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition);
+    const cacheKey = `ebay:${query}`;
     try {
-      const params = new URLSearchParams({
-        q:      query,
-        filter: 'buyingOptions:{FIXED_PRICE|AUCTION}',
-        sort:   'price',
-        limit:  '10',
-      });
+      // ── Primary: Finding API (real sold prices) ──────────────────────────
+      let listings: Array<{ title: string; price: number; url: string; imageUrl?: string; listedAt?: string }> = [];
+      let source: 'sold' | 'active' = 'active';
 
-      const res = await fetch(`${BROWSE_API}?${params}`, {
-        headers: {
-          'Authorization':           `Bearer ${token}`,
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
-        },
-      });
-
-      if (!res.ok) {
-        errors.push(`${card.player}: eBay ${res.status}`);
-        continue;
+      if (appId) {
+        const soldListings = await fetchFindingSold(query, appId, card.player).catch(() => null);
+        if (soldListings && soldListings.length > 0) {
+          listings = soldListings;
+          source   = 'sold';
+        }
       }
 
-      const data = await res.json() as Record<string, unknown>;
-      const items = (data.itemSummaries as Record<string, unknown>[]) ?? [];
-      const listings = items
-        .map((item) => {
-          const priceVal = (item.price as Record<string, string> | undefined)?.value;
-          const price = parseFloat(priceVal ?? '0');
-          const imageUrl = (item.image as Record<string, string> | undefined)?.imageUrl;
-          return { title: item.title as string, price, url: item.itemWebUrl as string, imageUrl };
-        })
-        .filter((l) => l.price > 0)
-        .sort((a, b) => a.price - b.price);
+      // ── Fallback: Browse API (active listings) ────────────────────────────
+      if (listings.length === 0) {
+        const params = new URLSearchParams({
+          q:      query,
+          filter: 'buyingOptions:{FIXED_PRICE|AUCTION}',
+          sort:   'price',
+          limit:  '10',
+        });
+
+        const res = await fetch(`${BROWSE_API}?${params}`, {
+          headers: {
+            'Authorization':           `Bearer ${token}`,
+            'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+          },
+        });
+
+        if (!res.ok) {
+          errors.push(`${card.player}: eBay ${res.status}`);
+          continue;
+        }
+
+        const data = await res.json() as Record<string, unknown>;
+        const items = (data.itemSummaries as Record<string, unknown>[]) ?? [];
+        listings = items
+          .map((item) => {
+            const priceVal = (item.price as Record<string, string> | undefined)?.value;
+            const price = parseFloat(priceVal ?? '0');
+            const imageUrl = (item.image as Record<string, string> | undefined)?.imageUrl;
+            return { title: item.title as string, price, url: item.itemWebUrl as string, imageUrl };
+          })
+          .filter((l) => l.price > 0)
+          .sort((a, b) => a.price - b.price);
+      }
 
       if (listings.length > 0) {
-        // Bust the eBay cache so next page load gets fresh data
-        setCachedEbay(`sold-completed:${query}`, listings);
-        setCachedEbay(`active:${query}`, listings);
+        setCachedEbay(cacheKey, listings, source);
+        setCachedEbay(`active:${query}`, listings, source);
+        dbSetEbayCache(cacheKey, listings, source).catch(() => {});
 
         const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
         recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
@@ -84,14 +103,28 @@ export async function POST(req: NextRequest) {
           if (prevPrice > 0) {
             const pctChange = ((currPrice - prevPrice) / prevPrice) * 100;
             if (Math.abs(pctChange) >= ALERT_THRESHOLD_PCT) {
+              const alertType = pctChange > 0 ? 'SPIKE' : 'DROP';
               await dbCreateAlert({
                 cardId:    card.id,
                 player:    card.player,
-                alertType: pctChange > 0 ? 'SPIKE' : 'DROP',
+                alertType,
                 oldPrice:  prevPrice,
                 newPrice:  currPrice,
                 pctChange: Math.round(pctChange * 100) / 100,
               });
+              // Send email alert (requires RESEND_API_KEY to be set)
+              const cardWithUser = card as unknown as Record<string, string>;
+              const ownerEmail = cardWithUser.ownerEmail;
+              if (ownerEmail) {
+                sendPriceAlertEmail({
+                  to:         ownerEmail,
+                  player:     card.player,
+                  alertType,
+                  oldPrice:   prevPrice,
+                  newPrice:   currPrice,
+                  pctChange:  Math.round(pctChange * 100) / 100,
+                }).catch(() => {});
+              }
             }
           }
         }
@@ -105,5 +138,17 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(`[price-refresh] refreshed ${refreshed}/${cards.length} cards`);
+
+  // Save per-user portfolio snapshots for the value-over-time chart
+  // Group updated cards by user and sum their current values
+  const userValues = new Map<string, number>();
+  for (const card of cards) {
+    const uid = (card as unknown as Record<string, string>).userId ?? 'legacy';
+    userValues.set(uid, (userValues.get(uid) ?? 0) + card.currentValue);
+  }
+  for (const [uid, total] of userValues) {
+    dbSavePortfolioSnapshot(uid, total).catch(() => {});
+  }
+
   return NextResponse.json({ refreshed, total: cards.length, errors });
 }

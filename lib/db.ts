@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import type { PlayerStats } from '@/types';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -128,6 +129,12 @@ async function _runMigrations() {
     WHERE outcome_checked_at IS NULL AND price_target IS NOT NULL
   `;
 
+  // Migration: add player_stats column to existing tables (no-op if already present)
+  await sql`ALTER TABLE card_signals ADD COLUMN IF NOT EXISTS player_stats JSONB`;
+
+  // Migration: add image_url to cards
+  await sql`ALTER TABLE cards ADD COLUMN IF NOT EXISTS image_url TEXT`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS market_narratives (
       id                SERIAL PRIMARY KEY,
@@ -157,6 +164,15 @@ async function _runMigrations() {
     )
   `;
 
+  // ── Player stats cache (persists BallDontLie/ESPN results across cold starts) ─
+  await sql`
+    CREATE TABLE IF NOT EXISTS player_stats_cache (
+      cache_key   TEXT PRIMARY KEY,
+      data        JSONB NOT NULL,
+      cached_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
   await sql`
     CREATE TABLE IF NOT EXISTS waitlist (
       id         SERIAL PRIMARY KEY,
@@ -183,6 +199,35 @@ async function _runMigrations() {
     CREATE INDEX IF NOT EXISTS idx_rate_limits_reset
     ON rate_limits (reset_at)
   `;
+
+  // ── Users / plan table ─────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id                SERIAL PRIMARY KEY,
+      clerk_user_id     TEXT NOT NULL UNIQUE,
+      stripe_customer_id TEXT,
+      plan              TEXT NOT NULL DEFAULT 'free',
+      plan_expires_at   TIMESTAMPTZ
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_users_clerk
+    ON users (clerk_user_id)
+  `;
+
+  // ── Portfolio value snapshots (for the value-over-time chart) ──────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+      id           SERIAL PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      total_value  NUMERIC(12,2) NOT NULL,
+      snapshot_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_user
+    ON portfolio_snapshots (user_id, snapshot_at DESC)
+  `;
 }
 
 // ─── Cards CRUD ───────────────────────────────────────────────────────────────
@@ -206,13 +251,14 @@ export async function dbUpsertCard(card: CardRow) {
     INSERT INTO cards (
       id, user_id, player, year, brand, card_number, variation,
       condition, sport, purchase_price, current_value,
-      added_at, last_price_update
+      added_at, last_price_update, image_url
     ) VALUES (
       ${card.id}, ${card.user_id}, ${card.player}, ${card.year}, ${card.brand},
       ${card.card_number ?? null}, ${card.variation ?? null},
       ${card.condition}, ${card.sport},
       ${card.purchase_price}, ${card.current_value},
-      ${card.added_at}, ${card.last_price_update ?? null}
+      ${card.added_at}, ${card.last_price_update ?? null},
+      ${card.image_url ?? null}
     )
     ON CONFLICT (id) DO UPDATE SET
       player            = EXCLUDED.player,
@@ -224,7 +270,8 @@ export async function dbUpsertCard(card: CardRow) {
       sport             = EXCLUDED.sport,
       purchase_price    = EXCLUDED.purchase_price,
       current_value     = EXCLUDED.current_value,
-      last_price_update = EXCLUDED.last_price_update
+      last_price_update = EXCLUDED.last_price_update,
+      image_url         = COALESCE(EXCLUDED.image_url, cards.image_url)
   `;
 }
 
@@ -339,20 +386,23 @@ export interface SignalRow {
   outcomePct?: number;
   outcomeCorrect?: boolean | null;
   generatedAt?: string;
+  playerStats?: PlayerStats;
 }
 
 export async function dbSaveSignal(s: SignalRow): Promise<void> {
+  const playerStatsJson = s.playerStats != null ? JSON.stringify(s.playerStats) : null;
   await sql`
     INSERT INTO card_signals (
       card_id, player, card_hash, signal, confidence, summary,
       price_trend, player_context, scarcity_note, market_context,
       price_target, timeframe, wyckoff_regime, market_heat_score,
-      ev_per_dollar, quality_score, quality_rationale
+      ev_per_dollar, quality_score, quality_rationale, player_stats
     ) VALUES (
       ${s.cardId}, ${s.player}, ${s.cardHash}, ${s.signal}, ${s.confidence}, ${s.summary},
       ${s.priceTrend ?? null}, ${s.playerContext ?? null}, ${s.scarcityNote ?? null}, ${s.marketContext ?? null},
       ${s.priceTarget ?? null}, ${s.timeframe ?? null}, ${s.wyckoffRegime ?? null}, ${s.marketHeatScore ?? null},
-      ${s.evPerDollar ?? null}, ${s.qualityScore ?? null}, ${s.qualityRationale ?? null}
+      ${s.evPerDollar ?? null}, ${s.qualityScore ?? null}, ${s.qualityRationale ?? null},
+      ${playerStatsJson}
     )
   `;
 }
@@ -363,7 +413,7 @@ export async function dbGetRecentSignals(cardHash: string, limit: number): Promi
            price_trend, player_context, scarcity_note, market_context,
            price_target, timeframe, wyckoff_regime, market_heat_score,
            ev_per_dollar, quality_score, quality_rationale,
-           outcome_pct, outcome_correct, generated_at
+           outcome_pct, outcome_correct, generated_at, player_stats
     FROM card_signals
     WHERE card_hash = ${cardHash}
     ORDER BY generated_at DESC
@@ -390,7 +440,8 @@ export async function dbGetRecentSignals(cardHash: string, limit: number): Promi
     qualityRationale: r.quality_rationale as string | undefined,
     outcomePct:       r.outcome_pct != null ? parseFloat(r.outcome_pct as string) : undefined,
     outcomeCorrect:   r.outcome_correct as boolean | null | undefined,
-    generatedAt:      r.generated_at as string,
+    generatedAt:      r.generated_at ? new Date(r.generated_at as string | Date).toISOString() : undefined,
+    playerStats:      r.player_stats as PlayerStats | undefined,
   }));
 }
 
@@ -415,7 +466,7 @@ export async function dbGetPendingOutcomes(minAgeDays: number, maxAgeDays: numbe
     confidence:  r.confidence as number,
     summary:     r.summary as string,
     priceTarget: r.price_target != null ? parseFloat(r.price_target as string) : undefined,
-    generatedAt: r.generated_at as string,
+    generatedAt: r.generated_at ? new Date(r.generated_at as string | Date).toISOString() : undefined,
   }));
 }
 
@@ -550,6 +601,44 @@ export async function dbSetEbayCache(
   `;
 }
 
+// ─── Player stats cache (persistent across cold starts) ──────────────────────
+
+/**
+ * Retrieve cached player stats. Returns null if missing or older than maxAgeMs.
+ */
+export async function dbGetStatsCache(
+  cacheKey: string,
+  maxAgeMs: number,
+): Promise<unknown | null> {
+  const rows = await sql`
+    SELECT data, cached_at
+    FROM player_stats_cache
+    WHERE cache_key = ${cacheKey}
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const ageMs = Date.now() - new Date(rows[0].cached_at as string).getTime();
+  if (ageMs > maxAgeMs) return null;
+  return rows[0].data;
+}
+
+/**
+ * Persist player stats (or any JSON-serialisable data) to DB.
+ * Uses upsert so repeat calls are safe.
+ */
+export async function dbSetStatsCache(
+  cacheKey: string,
+  data: unknown,
+): Promise<void> {
+  await sql`
+    INSERT INTO player_stats_cache (cache_key, data, cached_at)
+    VALUES (${cacheKey}, ${JSON.stringify(data)}::jsonb, NOW())
+    ON CONFLICT (cache_key) DO UPDATE SET
+      data      = EXCLUDED.data,
+      cached_at = NOW()
+  `;
+}
+
 // ─── Waitlist ─────────────────────────────────────────────────────────────────
 
 /**
@@ -584,6 +673,104 @@ export async function dbGetWaitlistCount(): Promise<number> {
   return parseInt(rows[0].count as string, 10);
 }
 
+// ─── User plans ───────────────────────────────────────────────────────────────
+
+export async function dbGetUserPlan(clerkUserId: string): Promise<'free' | 'pro'> {
+  const rows = await sql`
+    SELECT plan FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1
+  `;
+  return (rows[0]?.plan as 'free' | 'pro') ?? 'free';
+}
+
+export async function dbUpsertUser(clerkUserId: string): Promise<void> {
+  await sql`
+    INSERT INTO users (clerk_user_id) VALUES (${clerkUserId})
+    ON CONFLICT (clerk_user_id) DO NOTHING
+  `;
+}
+
+export async function dbSetUserPlan(
+  clerkUserId: string,
+  plan: 'free' | 'pro',
+  expiresAt?: Date,
+): Promise<void> {
+  await sql`
+    INSERT INTO users (clerk_user_id, plan, plan_expires_at)
+    VALUES (${clerkUserId}, ${plan}, ${expiresAt ?? null})
+    ON CONFLICT (clerk_user_id) DO UPDATE SET
+      plan            = EXCLUDED.plan,
+      plan_expires_at = EXCLUDED.plan_expires_at
+  `;
+}
+
+export async function dbSetStripeCustomerId(
+  clerkUserId: string,
+  stripeCustomerId: string,
+): Promise<void> {
+  await sql`
+    INSERT INTO users (clerk_user_id, stripe_customer_id)
+    VALUES (${clerkUserId}, ${stripeCustomerId})
+    ON CONFLICT (clerk_user_id) DO UPDATE SET
+      stripe_customer_id = EXCLUDED.stripe_customer_id
+  `;
+}
+
+export async function dbGetUserByStripeCustomerId(
+  stripeCustomerId: string,
+): Promise<{ clerkUserId: string; plan: string } | null> {
+  const rows = await sql`
+    SELECT clerk_user_id, plan FROM users
+    WHERE stripe_customer_id = ${stripeCustomerId}
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  return { clerkUserId: rows[0].clerk_user_id as string, plan: rows[0].plan as string };
+}
+
+// ─── Portfolio snapshots ──────────────────────────────────────────────────────
+
+export async function dbSavePortfolioSnapshot(userId: string, totalValue: number): Promise<void> {
+  // Only save one snapshot per day per user — skip if one already exists today
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const existing = await sql`
+    SELECT id FROM portfolio_snapshots
+    WHERE user_id = ${userId}
+      AND snapshot_at >= ${today.toISOString()}
+    LIMIT 1
+  `;
+  if (existing.length > 0) {
+    // Update today's snapshot with the latest value
+    await sql`
+      UPDATE portfolio_snapshots
+      SET total_value = ${totalValue}, snapshot_at = NOW()
+      WHERE id = ${existing[0].id as number}
+    `;
+  } else {
+    await sql`
+      INSERT INTO portfolio_snapshots (user_id, total_value)
+      VALUES (${userId}, ${totalValue})
+    `;
+  }
+}
+
+export async function dbGetPortfolioSnapshots(
+  userId: string,
+  days: number,
+): Promise<Array<{ date: string; totalValue: number }>> {
+  const rows = await sql`
+    SELECT total_value, snapshot_at
+    FROM portfolio_snapshots
+    WHERE user_id = ${userId}
+      AND snapshot_at > NOW() - (${days} || ' days')::INTERVAL
+    ORDER BY snapshot_at ASC
+  `;
+  return rows.map((r) => ({
+    date:       new Date(r.snapshot_at as string | Date).toISOString().split('T')[0],
+    totalValue: parseFloat(r.total_value as string),
+  }));
+}
+
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 interface CardRow {
@@ -600,6 +787,7 @@ interface CardRow {
   current_value: number;
   added_at: string;
   last_price_update?: string;
+  image_url?: string;
 }
 
 function rowToCard(r: Record<string, unknown>) {
@@ -616,5 +804,6 @@ function rowToCard(r: Record<string, unknown>) {
     currentValue:     parseFloat(r.current_value as string),
     addedAt:          r.added_at as string,
     lastPriceUpdate:  r.last_price_update as string | undefined,
+    imageUrl:         r.image_url as string | undefined,
   };
 }

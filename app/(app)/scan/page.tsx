@@ -9,6 +9,7 @@ import { useStore } from '@/lib/store';
 import { IdentifiedCard, EbayListing, Card, Condition, Sport } from '@/types';
 import { generateId } from '@/lib/utils';
 import { buildEbayQuery } from '@/lib/ebay-utils';
+import UpgradeModal from '@/components/upgrade/UpgradeModal';
 
 const CONDITIONS: Condition[] = [
   'Raw', 'PSA 10', 'PSA 9', 'PSA 8', 'PSA 7', 'BGS 9.5', 'BGS 9', 'SGC 10',
@@ -63,7 +64,9 @@ export default function ScanPage() {
   const [currentValue, setCurrentValue] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const [cardPhoto, setCardPhoto] = useState<string | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [cardPhoto, setCardPhoto] = useState<string | null>(null);     // base64 preview
+  const [cardPhotoFile, setCardPhotoFile] = useState<File | null>(null); // original File for upload
   const cardPhotoInputRef = useRef<HTMLInputElement>(null);
 
   async function handleImage(base64: string, mediaType: string) {
@@ -128,9 +131,10 @@ export default function ScanPage() {
     setSoldLoading(true);
     setActiveLoading(true);
 
+    const playerParam = `&player=${encodeURIComponent(card.player)}`;
     const [soldRes, activeRes] = await Promise.allSettled([
-      fetch(`/api/ebay-sold?q=${encoded}`),
-      fetch(`/api/ebay-active?q=${encoded}`),
+      fetch(`/api/ebay-sold?q=${encoded}${playerParam}`),
+      fetch(`/api/ebay-active?q=${encoded}${playerParam}`),
     ]);
 
     try {
@@ -161,7 +165,7 @@ export default function ScanPage() {
     finally   { setActiveLoading(false); }
   }
 
-  function handleAddToPortfolio() {
+  async function handleAddToPortfolio() {
     if (!identified) return;
 
     // Duplicate detection
@@ -179,6 +183,22 @@ export default function ScanPage() {
 
     setAdding(true);
     const cardId = generateId();
+
+    // Upload photo to Vercel Blob (non-blocking — card still adds if upload fails)
+    let imageUrl: string | undefined;
+    if (cardPhotoFile) {
+      try {
+        const fd = new FormData();
+        fd.append('file', cardPhotoFile);
+        fd.append('cardId', cardId);
+        const uploadRes = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+        if (uploadRes.ok) {
+          const data = await uploadRes.json() as { url: string };
+          imageUrl = data.url;
+        }
+      } catch { /* non-blocking — card still adds without photo */ }
+    }
+
     const card: Card = {
       id: cardId,
       player: identified.player,
@@ -192,10 +212,28 @@ export default function ScanPage() {
       currentValue: parseFloat(currentValue) || avgPrice || 0,
       addedAt: new Date().toISOString(),
       lastPriceUpdate: new Date().toISOString(),
+      imageUrl,
     };
-    dispatch({ type: 'ADD_CARD', card });
-    if (cardPhoto) localStorage.setItem(`cardiq:photo:${cardId}`, cardPhoto);
-    router.push('/portfolio');
+    try {
+      // Pre-check the card limit before dispatching (avoids optimistic state pollution)
+      const limitCheck = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card }),
+      });
+      if (limitCheck.status === 402) {
+        setAdding(false);
+        setShowUpgrade(true);
+        return;
+      }
+      if (!limitCheck.ok) throw new Error(`HTTP ${limitCheck.status}`);
+      // Card was saved to DB by the fetch above; now update local store without a second API call
+      dispatch({ type: 'ADD_CARD', card });
+      router.push('/portfolio');
+    } catch (err) {
+      console.error('[scan] add to portfolio failed:', err);
+      setAdding(false);
+    }
   }
 
   function reset() {
@@ -212,7 +250,9 @@ export default function ScanPage() {
     setCondition('Raw');
     setPurchasePrice('');
     setCurrentValue('');
+    setAdding(false);
     setCardPhoto(null);
+    setCardPhotoFile(null);
     setManualPlayer('');
     setManualYear('');
     setManualBrand('');
@@ -226,6 +266,7 @@ export default function ScanPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 fade-in-up">
+      {showUpgrade && <UpgradeModal reason="CARD_LIMIT" onClose={() => setShowUpgrade(false)} />}
       <div>
         <h1 className="section-accent font-card text-5xl uppercase tracking-widest"><span className="title-gold">Add a Card</span></h1>
         <p className="text-slate-500 mt-2 text-sm font-sans leading-relaxed">
@@ -431,6 +472,7 @@ export default function ScanPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                setCardPhotoFile(file);
                 const reader = new FileReader();
                 reader.onload = (ev) => setCardPhoto(ev.target?.result as string ?? null);
                 reader.readAsDataURL(file);

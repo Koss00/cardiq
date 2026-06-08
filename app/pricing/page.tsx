@@ -1,15 +1,16 @@
+'use client';
 import Link from 'next/link';
-import { ChevronRight, Check, Brain, BarChart3, ScanLine, Bell, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Check, Brain, BarChart3, ScanLine, Bell, Zap, Loader2 } from 'lucide-react';
 
-export const metadata = { title: 'Pricing — CardIQ' };
 
 const FREE_FEATURES = [
-  'Up to 10 cards in your portfolio',
+  'Up to 5 cards in your portfolio',
   'AI card identification via photo scan',
-  'Manual card entry',
+  'Manual card entry + CSV import',
   'Live eBay market pricing',
   'Portfolio ROI tracking',
-  '5 AI intelligence signals per month',
+  '20 AI signal refreshes per day',
   'Price history charts',
 ];
 
@@ -27,6 +28,26 @@ const PRO_FEATURES = [
 ];
 
 export default function PricingPage() {
+  const [loading, setLoading] = useState(false);
+
+  async function handleUpgrade() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ source: 'pricing' }),
+      });
+      const { url, error } = await res.json() as { url?: string; error?: string };
+      if (error) { alert(error); return; }
+      if (url) window.location.href = url;
+    } catch {
+      alert('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#060E1C] text-slate-100">
       {/* Nav */}
@@ -103,7 +124,7 @@ export default function PricingPage() {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[10px] font-display font-black uppercase tracking-widest text-chrome-500">Pro</p>
                 <span className="text-[9px] font-display font-black uppercase tracking-widest px-2.5 py-1 rounded-sm bg-[rgba(245,200,66,0.12)] border border-[rgba(245,200,66,0.3)] text-gold-400">
-                  Coming Soon
+                  Most Popular
                 </span>
               </div>
               <div className="flex items-end gap-2">
@@ -122,13 +143,13 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <a
-              href="mailto:maxkoss07@gmail.com?subject=CardIQ Pro Interest"
-              className="relative w-full flex items-center justify-center gap-2 py-3 rounded-sm btn-gold font-display font-black text-xs uppercase tracking-widest"
+            <button
+              onClick={handleUpgrade}
+              disabled={loading}
+              className="relative w-full flex items-center justify-center gap-2 py-3 rounded-sm btn-gold font-display font-black text-xs uppercase tracking-widest disabled:opacity-50"
             >
-              <Zap size={12} />
-              Get Notified at Launch
-            </a>
+              {loading ? <><Loader2 size={12} className="animate-spin" /> Redirecting…</> : <><Zap size={12} /> Upgrade to Pro</>}
+            </button>
           </div>
         </div>
 

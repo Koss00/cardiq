@@ -109,13 +109,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (alerts?.length) dispatch({ type: 'LOAD_ALERTS', alerts });
             })
             .catch(() => {});
-          if (cards.length) {
-            fetch('/api/signals/prefetch', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cards }),
-            }).catch(() => {});
-          }
         } else {
           // No DB data yet — load from localStorage (first-time migration)
           const saved = localStorage.getItem('cardiq-portfolio');
@@ -125,13 +118,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               dispatch({ type: 'LOAD_STATE', state: parsed });
               // Migrate existing cards up to DB
               parsed.cards?.forEach((card) => dbSaveCard(card));
-              if (parsed.cards?.length) {
-                fetch('/api/signals/prefetch', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ cards: parsed.cards }),
-                }).catch(() => {});
-              }
             } catch {}
           }
         }

@@ -8,6 +8,9 @@ const SPORT_PATHS: Record<string, string> = {
   Golf:       'golf/pga',
 };
 
+// Hard cap — ESPN news fetch must resolve within 3s or we skip it.
+const NEWS_FETCH_TIMEOUT_MS = 3_000;
+
 /**
  * Fetch the most recent ESPN headlines that mention this player.
  * Returns up to 3 relevant headlines cached for 2h (using the stats cache).
@@ -20,36 +23,48 @@ export async function fetchPlayerNews(playerName: string, sport: string): Promis
   const sportPath = SPORT_PATHS[sport];
   if (!sportPath) return [];
 
-  try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/news?limit=25`,
-      { next: { revalidate: 0 } }
-    );
-    if (!res.ok) return [];
+  let timedOut = false;
 
-    const data = await res.json() as {
-      articles?: Array<{ headline: string; description?: string; published?: string }>;
+  try {
+    const fetchWork = async (): Promise<string[]> => {
+      const res = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/news?limit=25`,
+        { next: { revalidate: 0 } }
+      );
+      if (!res.ok) return [];
+
+      const data = await res.json() as {
+        articles?: Array<{ headline: string; description?: string; published?: string }>;
+      };
+
+      const nameParts = playerName.toLowerCase().split(' ').filter((w) => w.length > 3);
+      return (data.articles ?? [])
+        .filter((a) => {
+          const text = `${a.headline} ${a.description ?? ''}`.toLowerCase();
+          return nameParts.some((part) => text.includes(part));
+        })
+        .slice(0, 3)
+        .map((a) => {
+          const date = a.published
+            ? ` (${new Date(a.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
+            : '';
+          return a.description
+            ? `${a.headline}${date} — ${a.description.slice(0, 100)}`
+            : `${a.headline}${date}`;
+        });
     };
 
-    // Match any article that contains at least one significant name word
-    const nameParts = playerName.toLowerCase().split(' ').filter((w) => w.length > 3);
-    const relevant = (data.articles ?? [])
-      .filter((a) => {
-        const text = `${a.headline} ${a.description ?? ''}`.toLowerCase();
-        return nameParts.some((part) => text.includes(part));
-      })
-      .slice(0, 3)
-      .map((a) => {
-        const date = a.published
-          ? ` (${new Date(a.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
-          : '';
-        return a.description
-          ? `${a.headline}${date} — ${a.description.slice(0, 100)}`
-          : `${a.headline}${date}`;
-      });
+    const relevant = await Promise.race([
+      fetchWork(),
+      new Promise<string[]>((resolve) => setTimeout(() => {
+        console.warn(`[player-news] timeout (${NEWS_FETCH_TIMEOUT_MS}ms) for "${playerName}"`);
+        timedOut = true;
+        resolve([]);
+      }, NEWS_FETCH_TIMEOUT_MS)),
+    ]);
 
-    // Cache even empty results (avoids hammering ESPN on every signal refresh)
-    setCachedStats(cacheKey, relevant);
+    // Only cache real results — don't cache timeout fallbacks (ESPN might recover)
+    if (!timedOut) setCachedStats(cacheKey, relevant);
     return relevant;
   } catch (err) {
     console.warn(`[player-news] ESPN fetch failed for "${playerName}":`, err);

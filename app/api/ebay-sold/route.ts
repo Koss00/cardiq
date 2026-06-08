@@ -4,11 +4,10 @@ import { getEbayAppToken } from '@/lib/ebay-auth';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, validateQuery } from '@/lib/security';
 import { dbGetEbayCache, dbSetEbayCache, initSchema } from '@/lib/db';
+import { fetchFindingSold } from '@/lib/ebay-utils';
 
 const EBAY_DB_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
-
-const FINDING_API = 'https://svcs.ebay.com/services/search/FindingService/v1';
-const BROWSE_API  = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
+const BROWSE_API     = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
@@ -19,20 +18,21 @@ export async function GET(req: NextRequest) {
   const raw = searchParams.get('q');
   const qResult = validateQuery(raw);
   if (!qResult.ok) return NextResponse.json({ error: qResult.error }, { status: 400 });
-  const query = qResult.value;
+  const query  = qResult.value;
+  const player = searchParams.get('player') ?? undefined;
 
-  const cacheKey = `sold-completed:${query}`;
+  const cacheKey = `ebay:${query}`;
 
   // 1. In-memory cache (fast, dies on cold start)
   const cached = getCachedEbay(cacheKey);
-  if (cached) return NextResponse.json({ listings: cached, fromCache: true, source: 'sold' });
+  if (cached) return NextResponse.json({ listings: cached.listings, fromCache: true, source: cached.source });
 
-  // 2. DB cache (persistent across cold starts — checked before hitting eBay API)
+  // 2. DB cache (persistent across cold starts)
   try {
     await initSchema().catch(() => {});
     const dbCached = await dbGetEbayCache(cacheKey, EBAY_DB_TTL_MS);
     if (dbCached) {
-      setCachedEbay(cacheKey, dbCached.listings); // warm in-memory
+      setCachedEbay(cacheKey, dbCached.listings, dbCached.source);
       return NextResponse.json({ listings: dbCached.listings, fromCache: true, source: dbCached.source });
     }
   } catch {
@@ -42,60 +42,18 @@ export async function GET(req: NextRequest) {
   const appId = process.env.EBAY_APP_ID;
   if (!appId) return NextResponse.json({ error: 'eBay not configured.', listings: [], fromCache: false });
 
-  // ── Try Finding API (actual sold comps) ──────────────────────────────────────
-  try {
-    const params = new URLSearchParams({
-      'OPERATION-NAME':                 'findCompletedItems',
-      'SERVICE-VERSION':                '1.13.0',
-      'SECURITY-APPNAME':               appId,
-      'RESPONSE-DATA-FORMAT':           'JSON',
-      'keywords':                       query,
-      'itemFilter(0).name':             'SoldItemsOnly',
-      'itemFilter(0).value':            'true',
-      'sortOrder':                      'EndTimeSoonest',
-      'paginationInput.entriesPerPage': '10',
-    });
-
-    const res = await fetch(`${FINDING_API}?${params.toString()}`, { next: { revalidate: 0 } });
-    if (res.ok) {
-      const data = await res.json() as Record<string, unknown>;
-      const searchResult = (data.findCompletedItemsResponse as Record<string, unknown>[])?.[0];
-      const ack = (searchResult?.ack as string[])?.[0];
-
-      if (ack === 'Success') {
-        const rawItems = (
-          (searchResult?.searchResult as Record<string, unknown>[])?.[0]?.item as Record<string, unknown>[]
-        ) ?? [];
-
-        const listings = rawItems.map((item) => {
-          const sellingStatus = (item.sellingStatus as Record<string, unknown>[])?.[0];
-          const priceVal = (sellingStatus?.convertedCurrentPrice as Record<string, string>[])?.[0]?.__value__;
-          const price = parseFloat(priceVal ?? '0');
-          const galleryURL = (item.galleryURL as string[])?.[0];
-          const viewItemURL = (item.viewItemURL as string[])?.[0];
-          const title = (item.title as string[])?.[0] ?? '';
-          const endTime = (item.listingInfo as Record<string, unknown>[])?.[0]?.endTime as string[] | undefined;
-          const soldDate = endTime?.[0]
-            ? new Date(endTime[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : undefined;
-          return { title, price, url: viewItemURL ?? '', imageUrl: galleryURL, soldDate };
-        }).filter((l) => l.price > 0);
-
-        if (listings.length > 0) {
-          setCachedEbay(cacheKey, listings);
-          dbSetEbayCache(cacheKey, listings, 'sold').catch(() => {});
-          const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
-          recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
-          return NextResponse.json({ listings, fromCache: false, source: 'sold' });
-        }
-      }
-    }
-    console.log('[ebay-sold] Finding API unavailable or empty — falling back to Browse API');
-  } catch (err) {
-    console.warn('[ebay-sold] Finding API error:', err instanceof Error ? err.message : String(err));
+  // ── Primary: Finding API (real sold prices, with progressive fallback) ────
+  const soldListings = await fetchFindingSold(query, appId, player).catch(() => null);
+  if (soldListings && soldListings.length > 0) {
+    setCachedEbay(cacheKey, soldListings, 'sold');
+    dbSetEbayCache(cacheKey, soldListings, 'sold').catch(() => {});
+    const avg = soldListings.reduce((s, l) => s + l.price, 0) / soldListings.length;
+    recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
+    return NextResponse.json({ listings: soldListings, fromCache: false, source: 'sold' });
   }
 
-  // ── Fallback: Browse API recent listings ─────────────────────────────────────
+  // ── Fallback: Browse API (active listings) ─────────────────────────────────
+  console.log('[ebay-sold] Finding API empty — falling back to Browse API');
   try {
     const token = await getEbayAppToken();
     const params = new URLSearchParams({
@@ -120,19 +78,19 @@ export async function GET(req: NextRequest) {
 
     const listings = rawItems.map((item) => {
       const priceVal = (item.price as Record<string, string> | undefined)?.value;
-      const price = parseFloat(priceVal ?? '0');
+      const price    = parseFloat(priceVal ?? '0');
       const imageUrl = (item.image as Record<string, string> | undefined)?.imageUrl;
       return { title: item.title as string, price, url: item.itemWebUrl as string, imageUrl };
     }).filter((l) => l.price > 0).sort((a, b) => a.price - b.price);
 
-    setCachedEbay(cacheKey, listings);
-    dbSetEbayCache(cacheKey, listings, 'browse').catch(() => {});
+    setCachedEbay(cacheKey, listings, 'active');
+    dbSetEbayCache(cacheKey, listings, 'active').catch(() => {});
     if (listings.length > 0) {
       const avg = listings.reduce((s, l) => s + l.price, 0) / listings.length;
       recordPriceHistory(`history:${query}`, Math.round(avg * 100) / 100);
     }
 
-    return NextResponse.json({ listings, fromCache: false, source: 'browse' });
+    return NextResponse.json({ listings, fromCache: false, source: 'active' });
   } catch (err) {
     console.error('[ebay-sold] Browse fallback error:', err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: 'eBay pricing unavailable.', listings: [], fromCache: false });

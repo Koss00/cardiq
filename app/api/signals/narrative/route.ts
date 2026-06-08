@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 600,
       system: 'You are a portfolio intelligence analyst. Return only valid JSON, no markdown.',
       messages: [{

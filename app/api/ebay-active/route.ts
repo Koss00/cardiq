@@ -4,10 +4,10 @@ import { getEbayAppToken } from '@/lib/ebay-auth';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, validateQuery } from '@/lib/security';
 import { dbGetEbayCache, dbSetEbayCache, initSchema } from '@/lib/db';
+import { buildFindingQueryFallbacks } from '@/lib/ebay-utils';
 
 const EBAY_DB_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
-
-const BROWSE_API = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
+const BROWSE_API     = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
@@ -20,29 +20,28 @@ export async function GET(req: NextRequest) {
   if (!qResult.ok) {
     return NextResponse.json({ error: qResult.error }, { status: 400 });
   }
-  const query = qResult.value;
+  const query  = qResult.value;
+  const player = searchParams.get('player') ?? undefined; // used for reliable last-resort fallback
 
   const cacheKey = `active:${query}`;
 
   // 1. In-memory cache (fast, dies on cold start)
   const cached = getCachedEbay(cacheKey);
   if (cached) {
-    return NextResponse.json({ listings: cached, fromCache: true });
+    return NextResponse.json({ listings: cached.listings, fromCache: true });
   }
 
-  // 2. DB cache (persistent across cold starts — checked before hitting eBay API)
+  // 2. DB cache (persistent across cold starts)
   try {
     await initSchema().catch(() => {});
     const dbCached = await dbGetEbayCache(cacheKey, EBAY_DB_TTL_MS);
     if (dbCached) {
-      setCachedEbay(cacheKey, dbCached.listings);
+      setCachedEbay(cacheKey, dbCached.listings, 'active');
       return NextResponse.json({ listings: dbCached.listings, fromCache: true });
     }
   } catch {
     // DB unavailable — fall through to eBay API
   }
-
-  console.log(`[ebay-active] fetching active listings for: "${query}"`);
 
   let token: string;
   try {
@@ -52,62 +51,72 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'eBay authentication failed.', listings: [], fromCache: false }, { status: 200 });
   }
 
-  try {
-    const params = new URLSearchParams({
-      q:      query,
-      filter: 'buyingOptions:{FIXED_PRICE}',
-      sort:   'price',
-      limit:  '10',
-    });
+  // Try progressively simpler queries until we get results.
+  // This prevents returning 0 listings for specific queries like
+  // "2025 Panini Prizm Black Bryce Underwood /175" when broader queries work.
+  const queryFallbacks = buildFindingQueryFallbacks(query, player);
 
-    const res = await fetch(`${BROWSE_API}?${params.toString()}`, {
-      headers: {
-        'Authorization':           `Bearer ${token}`,
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
-        'Content-Type':            'application/json',
-      },
-      next: { revalidate: 0 },
-    });
+  for (const q of queryFallbacks) {
+    try {
+      console.log(`[ebay-active] trying query: "${q}"`);
+      const params = new URLSearchParams({
+        q:      q,
+        filter: 'buyingOptions:{FIXED_PRICE}',
+        sort:   'price',
+        limit:  '10',
+      });
 
-    console.log('[ebay-active] status:', res.status);
-    const rawBody = await res.text();
+      const res = await fetch(`${BROWSE_API}?${params.toString()}`, {
+        headers: {
+          'Authorization':           `Bearer ${token}`,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+          'Content-Type':            'application/json',
+        },
+        next: { revalidate: 0 },
+      });
 
-    if (!res.ok) {
-      console.error(`[ebay-active] HTTP ${res.status}:`, rawBody.slice(0, 200));
-      return NextResponse.json(
-        { error: 'eBay listings unavailable. Please try again.', listings: [], fromCache: false },
-        { status: 200 }
-      );
+      if (!res.ok) {
+        console.error(`[ebay-active] HTTP ${res.status} for "${q}"`);
+        continue;
+      }
+
+      const data = await res.json() as Record<string, unknown>;
+      const rawItems = (data.itemSummaries as Record<string, unknown>[] | undefined) ?? [];
+      console.log(`[ebay-active] ${rawItems.length} results for "${q}"`);
+
+      if (rawItems.length === 0) continue; // try next fallback
+
+      const listings = rawItems
+        .map((item) => {
+          const priceVal = (item.price as Record<string, string> | undefined)?.value;
+          const price    = parseFloat(priceVal ?? '0');
+          const imageUrl = (item.image as Record<string, string> | undefined)?.imageUrl;
+          return {
+            title:     item.title as string,
+            price,
+            url:       item.itemWebUrl as string,
+            condition: item.condition as string | undefined,
+            imageUrl,
+          };
+        })
+        .filter((l) => l.price > 0);
+
+      if (listings.length === 0) continue;
+
+      if (q !== query) {
+        console.log(`[ebay-active] returning ${listings.length} listings using simplified query "${q}"`);
+      }
+
+      setCachedEbay(cacheKey, listings, 'active');
+      dbSetEbayCache(cacheKey, listings, 'active').catch(() => {});
+      return NextResponse.json({ listings, fromCache: false });
+
+    } catch (err) {
+      console.error(`[ebay-active] error for "${q}":`, err instanceof Error ? err.message : String(err));
     }
-
-    const data = JSON.parse(rawBody) as Record<string, unknown>;
-    const rawItems = (data.itemSummaries as Record<string, unknown>[] | undefined) ?? [];
-    console.log(`[ebay-active] got ${rawItems.length} items`);
-
-    const listings = rawItems
-      .map((item) => {
-        const priceVal = (item.price as Record<string, string> | undefined)?.value;
-        const price    = parseFloat(priceVal ?? '0');
-        const imageUrl = (item.image as Record<string, string> | undefined)?.imageUrl;
-        return {
-          title:     item.title as string,
-          price,
-          url:       item.itemWebUrl as string,
-          condition: item.condition as string | undefined,
-          imageUrl,
-        };
-      })
-      .filter((l) => l.price > 0);
-
-    setCachedEbay(cacheKey, listings);
-    dbSetEbayCache(cacheKey, listings, 'browse').catch(() => {});
-    return NextResponse.json({ listings, fromCache: false });
-
-  } catch (err) {
-    console.error('[ebay-active] error:', err instanceof Error ? err.message : String(err));
-    return NextResponse.json(
-      { error: 'eBay listings unavailable. Please try again.', listings: [], fromCache: false },
-      { status: 200 }
-    );
   }
+
+  // All fallbacks exhausted — genuinely no listings
+  console.log(`[ebay-active] no listings found after all fallbacks for "${query}"`);
+  return NextResponse.json({ listings: [], fromCache: false });
 }

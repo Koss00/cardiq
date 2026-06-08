@@ -1,12 +1,16 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ScanLine, Brain, ArrowRight, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { ScanLine, Brain, ArrowRight, Plus, TrendingUp, TrendingDown, Upload, Zap } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
 import { SAMPLE_CARDS } from '@/lib/sample-data';
 import { SignalType } from '@/types';
 import AlertsBanner from '@/components/dashboard/AlertsBanner';
+import PortfolioValueChart from '@/components/portfolio/PortfolioValueChart';
+import PerformanceBreakdown from '@/components/portfolio/PerformanceBreakdown';
+import ConcentrationPanel from '@/components/portfolio/ConcentrationPanel';
 
 const SIGNAL_STYLES: Record<SignalType, string> = {
   BUY:  'bg-emerald-500 text-[#060E1C] font-black',
@@ -17,6 +21,11 @@ const SIGNAL_STYLES: Record<SignalType, string> = {
 export default function Dashboard() {
   const { state, dispatch } = useStore();
   const { cards, signals } = state;
+  const [upgraded, setUpgraded] = useState(false);
+
+  useEffect(() => {
+    setUpgraded(new URLSearchParams(window.location.search).get('upgraded') === 'true');
+  }, []);
 
   const totalValue = cards.reduce((s, c) => s + c.currentValue, 0);
   const totalCost  = cards.reduce((s, c) => s + c.purchasePrice, 0);
@@ -74,6 +83,17 @@ export default function Dashboard() {
   return (
     <div className="space-y-7 fade-in-up">
 
+      {/* ── Pro upgrade success banner ────────────────────────────────── */}
+      {upgraded && (
+        <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/25 rounded-md px-5 py-4">
+          <Zap size={16} className="text-emerald-400 flex-shrink-0" />
+          <div>
+            <p className="text-emerald-400 font-display font-black text-sm uppercase tracking-widest">Welcome to CardIQ Pro!</p>
+            <p className="text-slate-400 text-xs font-sans mt-0.5">Unlimited cards and signal refreshes are now active.</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Stat cards ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
@@ -124,8 +144,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Quick actions ──────────────────────────────────────────────── */}
+      {/* ── Portfolio intelligence ─────────────────────────────────────── */}
+      <PortfolioValueChart />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <PerformanceBreakdown cards={cards} />
+        <ConcentrationPanel cards={cards} signals={signals} />
+      </div>
+
+      {/* ── Quick actions ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <Link
           href="/scan"
           className="group chrome-panel p-7 hover:border-[rgba(0,212,170,0.25)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer"
@@ -163,6 +190,27 @@ export default function Dashboard() {
             </div>
             <ArrowRight
               className="text-chrome-700 group-hover:text-gold-400 transition-colors duration-200 flex-shrink-0 ml-6"
+              size={18}
+            />
+          </div>
+        </Link>
+
+        <Link
+          href="/scan/import"
+          className="group chrome-panel p-7 hover:border-[rgba(0,212,170,0.22)] hover:bg-[#0F2040] transition-all duration-200 cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="w-11 h-11 border border-[rgba(0,212,170,0.2)] bg-electric/[0.07] flex items-center justify-center mb-4 rounded-md">
+                <Upload className="text-electric" size={19} />
+              </div>
+              <h3 className="font-display font-black text-white uppercase tracking-widest text-base mb-1.5">Import CSV</h3>
+              <p className="text-slate-500 text-sm font-sans leading-relaxed">
+                Bulk import your collection from a spreadsheet — up to 200 cards at once
+              </p>
+            </div>
+            <ArrowRight
+              className="text-chrome-700 group-hover:text-electric transition-colors duration-200 flex-shrink-0 ml-6"
               size={18}
             />
           </div>

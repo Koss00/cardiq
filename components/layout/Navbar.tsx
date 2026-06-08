@@ -2,17 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, ScanLine, Brain, Layers, Settings } from 'lucide-react';
+import { BarChart3, ScanLine, Brain, Layers, Settings, Upload } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/lib/store';
 import { formatCurrency, calcRoi } from '@/lib/utils';
 
 const NAV = [
-  { href: '/dashboard',    label: 'Dashboard',    icon: BarChart3 },
-  { href: '/scan',         label: 'Scan',         icon: ScanLine  },
-  { href: '/portfolio',    label: 'Portfolio',     icon: Layers    },
-  { href: '/intelligence', label: 'Intelligence',  icon: Brain     },
-  { href: '/settings',     label: 'Settings',      icon: Settings  },
+  { href: '/dashboard',    label: 'Dashboard',    icon: BarChart3, mobileOnly: false },
+  { href: '/scan',         label: 'Scan',         icon: ScanLine,  mobileOnly: false },
+  { href: '/portfolio',    label: 'Portfolio',     icon: Layers,    mobileOnly: false },
+  { href: '/intelligence', label: 'Intelligence',  icon: Brain,     mobileOnly: false },
+  { href: '/settings',     label: 'Settings',      icon: Settings,  mobileOnly: false },
+];
+
+// Extra desktop-only nav items (too many for mobile bottom bar)
+const DESKTOP_EXTRA = [
+  { href: '/scan/import', label: 'Import', icon: Upload },
 ];
 
 export default function Navbar() {
@@ -51,8 +56,8 @@ export default function Navbar() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-0.5" aria-label="Main navigation">
-            {NAV.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
+            {[...NAV, ...DESKTOP_EXTRA].map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/');
               return (
                 <Link
                   key={href}

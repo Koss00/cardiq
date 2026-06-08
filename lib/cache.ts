@@ -10,7 +10,7 @@ const STATS_TTL_MS  = 24 * 60 * 60 * 1000;
 // Module-level Maps give us the same TTL behaviour within a warm function's lifetime.
 
 const scanCache    = new Map<string, { result: unknown; cardKey: string; cachedAt: number }>();
-const ebayCache    = new Map<string, { listings: unknown; cachedAt: number }>();
+const ebayCache    = new Map<string, { listings: unknown; source: string; cachedAt: number }>();
 const signalCache  = new Map<string, { signal: unknown; cachedAt: number }>();
 const statsCache   = new Map<string, { stats: unknown; cachedAt: number }>();
 
@@ -42,15 +42,15 @@ export function setCachedScan(imageHash: string, result: unknown, cardKey: strin
 
 // ─── eBay cache ───────────────────────────────────────────────────────────────
 
-export function getCachedEbay(query: string): unknown | null {
+export function getCachedEbay(query: string): { listings: unknown; source: string } | null {
   const entry = ebayCache.get(query);
   if (!entry) return null;
   if (Date.now() - entry.cachedAt > EBAY_TTL_MS) { ebayCache.delete(query); return null; }
-  return entry.listings;
+  return { listings: entry.listings, source: entry.source };
 }
 
-export function setCachedEbay(query: string, listings: unknown) {
-  ebayCache.set(query, { listings, cachedAt: Date.now() });
+export function setCachedEbay(query: string, listings: unknown, source: string) {
+  ebayCache.set(query, { listings, source, cachedAt: Date.now() });
 }
 
 // ─── Signal cache ─────────────────────────────────────────────────────────────

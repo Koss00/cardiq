@@ -1,6 +1,139 @@
 // ─── eBay Intelligence Utilities ─────────────────────────────────────────────
 // Extracts velocity, trend, and liquidity signals from raw eBay comp data.
 
+// ─── Finding API (Real Sold Prices) ──────────────────────────────────────────
+
+const FINDING_API = 'https://svcs.ebay.com/services/search/FindingService/v1';
+
+export interface SoldListing {
+  title: string;
+  price: number;
+  url: string;
+  imageUrl?: string;
+  soldDate?: string;  // human-readable: "Jun 1, 2026"
+  listedAt?: string;  // ISO 8601 — used by buildEbayIntel for recency math
+}
+
+/**
+ * Build progressive query fallbacks from most specific → most general.
+ * The Finding API often returns 0 results for highly-specific queries, so we
+ * progressively strip grade → serial → variation until we find sold comps.
+ *
+ * Final fallback is always "YEAR FIRSTNAME LASTNAME" extracted from the
+ * cleaned query — guaranteed to find SOMETHING for any real player card.
+ */
+/**
+ * @param query   The cleaned eBay search query.
+ * @param player  Optional player name. When provided the last-resort fallback
+ *                is "YEAR PLAYER" which is reliable. Without it the heuristic
+ *                (last 2 tokens) can accidentally include variation words.
+ */
+export function buildFindingQueryFallbacks(query: string, player?: string): string[] {
+  const fallbacks: string[] = [query];
+
+  // 1. Strip grade suffix (PSA 10, PSA 9, BGS 9.5, SGC 10, etc.)
+  const noGrade = query.replace(/\s+(PSA|BGS|SGC)\s+\d+(\.\d+)?\s*$/i, '').trim();
+  if (noGrade !== query) fallbacks.push(noGrade);
+
+  // 2. Strip print-run serial ("/149", "/25") from the end
+  const prev = fallbacks[fallbacks.length - 1];
+  const noSerial = prev.replace(/\s+\/\d+\s*$/, '').trim();
+  if (noSerial !== prev) fallbacks.push(noSerial);
+
+  // 3. Last resort: year + player name.
+  //    When the player name is known use it directly — avoids the "last 2 tokens"
+  //    heuristic accidentally picking up variation words (e.g. "Underwood SILVER").
+  const year = query.split(/\s+/)[0] ?? '';
+  if (player && year) {
+    const yearPlayer = `${year} ${player}`;
+    if (!fallbacks.includes(yearPlayer)) fallbacks.push(yearPlayer);
+  } else {
+    // Heuristic when player not available: last 2 tokens of cleaned query.
+    // Works for most cards (e.g. "2025 Panini Prizm Black Bryce Underwood" → "2025 Bryce Underwood")
+    const base   = fallbacks[fallbacks.length - 1];
+    const tokens = base.split(/\s+/);
+    if (tokens.length >= 3) {
+      const yearPlayer = `${tokens[0]} ${tokens.slice(-2).join(' ')}`;
+      if (!fallbacks.includes(yearPlayer)) fallbacks.push(yearPlayer);
+    }
+  }
+
+  return [...new Set(fallbacks)]; // deduplicate, preserve specificity order
+}
+
+async function tryFindingAPIOnce(query: string, appId: string): Promise<SoldListing[]> {
+  const params = new URLSearchParams({
+    'OPERATION-NAME':                 'findCompletedItems',
+    'SERVICE-VERSION':                '1.13.0',
+    'SECURITY-APPNAME':               appId,
+    'RESPONSE-DATA-FORMAT':           'JSON',
+    'keywords':                       query,
+    'itemFilter(0).name':             'SoldItemsOnly',
+    'itemFilter(0).value':            'true',
+    'sortOrder':                      'EndTimeSoonest',
+    'paginationInput.entriesPerPage': '10',
+  });
+
+  const res = await fetch(`${FINDING_API}?${params.toString()}`, { next: { revalidate: 0 } });
+  if (!res.ok) return [];
+
+  const data = await res.json() as Record<string, unknown>;
+  const searchResult = (data.findCompletedItemsResponse as Record<string, unknown>[])?.[0];
+  if ((searchResult?.ack as string[])?.[0] !== 'Success') return [];
+
+  const rawItems = (
+    (searchResult?.searchResult as Record<string, unknown>[])?.[0]?.item as Record<string, unknown>[]
+  ) ?? [];
+
+  return rawItems.map((item) => {
+    const sellingStatus = (item.sellingStatus as Record<string, unknown>[])?.[0];
+    const priceVal      = (sellingStatus?.convertedCurrentPrice as Record<string, string>[])?.[0]?.__value__;
+    const price         = parseFloat(priceVal ?? '0');
+    const galleryURL    = (item.galleryURL as string[])?.[0];
+    const viewItemURL   = (item.viewItemURL as string[])?.[0];
+    const title         = (item.title as string[])?.[0] ?? '';
+    const endTimeRaw    = (item.listingInfo as Record<string, unknown>[])?.[0]?.endTime as string[] | undefined;
+    const endTimeStr    = endTimeRaw?.[0]; // ISO 8601 string
+    return {
+      title,
+      price,
+      url:      viewItemURL ?? '',
+      imageUrl: galleryURL,
+      soldDate: endTimeStr
+        ? new Date(endTimeStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : undefined,
+      listedAt: endTimeStr, // ISO — keeps recency math accurate in buildEbayIntel
+    };
+  }).filter((l) => l.price > 0);
+}
+
+/**
+ * Fetch real sold comps from eBay Finding API with progressive query fallback.
+ *
+ * Tries queries from most specific to most general until results are found.
+ * Returns the first non-empty result set, or null if nothing found / API down.
+ */
+export async function fetchFindingSold(query: string, appId: string, player?: string): Promise<SoldListing[] | null> {
+  const queries = buildFindingQueryFallbacks(query, player);
+  for (const q of queries) {
+    try {
+      const listings = await tryFindingAPIOnce(q, appId);
+      if (listings.length > 0) {
+        if (q !== query) {
+          console.log(`[finding-api] ${listings.length} sold comps for "${q}" (simplified from "${query}")`);
+        } else {
+          console.log(`[finding-api] ${listings.length} sold comps for "${q}"`);
+        }
+        return listings;
+      }
+    } catch (err) {
+      console.warn(`[finding-api] error for "${q}":`, err instanceof Error ? err.message : String(err));
+    }
+  }
+  console.log(`[finding-api] 0 sold comps after all fallbacks for "${query}"`);
+  return null;
+}
+
 /**
  * Builds a clean eBay search query from card fields.
  *
@@ -18,13 +151,22 @@ export function buildEbayQuery(
 ): string {
   let varPart = (variation ?? '').trim();
 
-  // Strip "Numbered" (standalone word, any casing)
+  // Strip specific copy serial "(097/175)" — this is the collector's individual card number,
+  // not the print run. Including it makes the query unique to one listing and returns nothing.
+  varPart = varPart.replace(/\s*\(\d+\/\d+\)/g, '').trim();
+
+  // Strip noise words that hurt eBay keyword matching
   varPart = varPart.replace(/\bNumbered\b/gi, '').trim();
+  varPart = varPart.replace(/\bSerial\b/gi, '').trim();
+
+  // Strip commas — eBay keyword search doesn't use comma syntax
+  varPart = varPart.replace(/,/g, ' ').trim();
+
   // Collapse multiple spaces left behind
   varPart = varPart.replace(/\s{2,}/g, ' ').trim();
 
   // Remove leading variation word if it already appears in the brand
-  // e.g. brand="Panini Prizm Black", variation="Prizm Silver /175" → "Silver /175"
+  // e.g. brand="Panini Prizm Black", variation="Prizm /175" → "/175"
   if (varPart) {
     const brandLower = brand.toLowerCase();
     const firstVarWord = varPart.split(/\s+/)[0];

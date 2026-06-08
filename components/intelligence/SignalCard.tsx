@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   TrendingUp, TrendingDown, Minus, Target, Clock, BarChart2, Star,
   Layers, Activity, Newspaper, Info, ChevronDown, ChevronUp, Globe,
+  Database, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { CardSignal } from '@/types';
 import { formatCurrency } from '@/lib/utils';
@@ -226,7 +227,7 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
           <div className="flex items-center gap-2 mb-2.5 flex-wrap">
             <span className="flex items-center gap-1 bg-[rgba(0,212,170,0.12)] text-electric border border-[rgba(0,212,170,0.3)] text-[9px] font-display font-semibold uppercase tracking-widest px-2.5 py-1 rounded-md">
               <Activity size={8} />
-              {signal.playerStats?.isRetired && !signal.playerStats?.knownActive ? 'Career Stats' : 'Live Stats'}
+              {!signal.playerStats ? 'Player Stats' : signal.playerStats.isRetired && !signal.playerStats.knownActive ? 'Career Stats' : 'Live Stats'}
             </span>
             {signal.playerStats && (
               <span className="text-[10px] text-muted font-display">
@@ -257,8 +258,10 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
             </div>
           ) : signal.playerStats?.knownActive ? (
             <p className="text-muted text-[11px] font-display italic">Active player — live stats temporarily unavailable</p>
+          ) : signal.playerStats?.isRetired ? (
+            <p className="text-muted text-[11px] font-display italic">Retired player — analysis based on career data and market comps</p>
           ) : (
-            <p className="text-muted text-[11px] font-display italic">Historical player — using market data only</p>
+            <p className="text-muted text-[11px] font-display italic">Stats visible on next Refresh — signal generated from cache</p>
           )}
         </div>
       )}
@@ -298,46 +301,88 @@ export default function SignalCard({ signal, streaming = false, activeField }: P
       )}
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-t border-[rgba(30,45,69,0.8)] bg-navy-950/40 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4 flex-wrap">
-          {signal.priceTarget && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <Target size={11} className="text-chrome-500" />
-              <span className="text-chrome-500 font-display font-black uppercase tracking-widest">Target:</span>
-              <span className="text-gold-400 font-display font-black">{formatCurrency(signal.priceTarget)}</span>
+      <div className="px-5 py-3 border-t border-[rgba(30,45,69,0.8)] bg-navy-950/40 space-y-2">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap">
+            {signal.priceTarget && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <Target size={11} className="text-chrome-500" />
+                <span className="text-chrome-500 font-display font-black uppercase tracking-widest">Target:</span>
+                <span className="text-gold-400 font-display font-black">{formatCurrency(signal.priceTarget)}</span>
+              </div>
+            )}
+            {signal.timeframe && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <Clock size={11} className="text-chrome-500" />
+                <span className="text-chrome-500 font-display uppercase tracking-widest">{signal.timeframe}</span>
+              </div>
+            )}
+            {!streaming && signal.evPerDollar !== undefined && (
+              <div
+                className="flex items-center gap-1 text-xs cursor-help"
+                title="Expected Return — projected price move % relative to current value based on target price and market data"
+              >
+                <span className="text-chrome-500 font-display font-black uppercase tracking-widest">Expected Return:</span>
+                <span className={`font-display font-black ${signal.evPerDollar >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {signal.evPerDollar >= 0 ? '+' : ''}{(signal.evPerDollar * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {!streaming && signal.qualityScore !== undefined && (
+              <span
+                className="text-[9px] font-display text-chrome-600 tabular-nums"
+                title={signal.qualityRationale ?? 'Data quality score'}
+              >
+                Q: {signal.qualityScore}/10
+              </span>
+            )}
+            {!streaming && (() => {
+              const ageMs = Date.now() - new Date(signal.generatedAt).getTime();
+              const ageH  = ageMs / (1000 * 60 * 60);
+              if (ageH > 24) return (
+                <span className="flex items-center gap-1 text-[9px] font-display text-amber-500 uppercase tracking-widest">
+                  <AlertTriangle size={9} />{Math.floor(ageH)}h old
+                </span>
+              );
+              if (ageH > 12) return (
+                <span className="flex items-center gap-1 text-[9px] font-display text-amber-500/60 uppercase tracking-widest">
+                  <RefreshCw size={9} />{Math.floor(ageH)}h old
+                </span>
+              );
+              return null;
+            })()}
+            <p className="text-xs text-chrome-700">
+              {new Date(signal.generatedAt).toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Data source transparency row */}
+        {!streaming && signal.confidenceFactors && (() => {
+          const mv = signal.confidenceFactors.find((f) => f.label === 'Market Velocity');
+          if (!mv) return null;
+          const desc = mv.description ?? '';
+          const compsMatch = desc.match(/(\d+)\s+comps/);
+          const count = compsMatch ? parseInt(compsMatch[1], 10) : null;
+          const isSold   = desc.includes('sold');
+          const isActive = count !== null && count > 0;
+          if (!isActive) return (
+            <div className="flex items-center gap-1.5">
+              <Database size={9} className="text-chrome-700" />
+              <span className="text-[9px] font-display text-chrome-700 uppercase tracking-widest">No eBay comp data</span>
             </div>
-          )}
-          {signal.timeframe && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <Clock size={11} className="text-chrome-500" />
-              <span className="text-chrome-500 font-display uppercase tracking-widest">{signal.timeframe}</span>
-            </div>
-          )}
-          {!streaming && signal.evPerDollar !== undefined && (
-            <div
-              className="flex items-center gap-1 text-xs cursor-help"
-              title="Expected Return — projected price move % relative to current value based on target price and market data"
-            >
-              <span className="text-chrome-500 font-display font-black uppercase tracking-widest">Expected Return:</span>
-              <span className={`font-display font-black ${signal.evPerDollar >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {signal.evPerDollar >= 0 ? '+' : ''}{(signal.evPerDollar * 100).toFixed(1)}%
+          );
+          return (
+            <div className="flex items-center gap-1.5">
+              <Database size={9} className={isSold ? 'text-emerald-500' : 'text-amber-500'} />
+              <span className={`text-[9px] font-display uppercase tracking-widest ${isSold ? 'text-emerald-500' : 'text-amber-500'}`}>
+                {count} {isSold ? 'sold comps' : 'active listings'}
               </span>
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {!streaming && signal.qualityScore !== undefined && (
-            <span
-              className="text-[9px] font-display text-chrome-600 tabular-nums"
-              title={signal.qualityRationale ?? 'Data quality score'}
-            >
-              Q: {signal.qualityScore}/10
-            </span>
-          )}
-          <p className="text-xs text-chrome-700">
-            {new Date(signal.generatedAt).toLocaleString()}
-          </p>
-        </div>
+          );
+        })()}
       </div>
 
     </div>

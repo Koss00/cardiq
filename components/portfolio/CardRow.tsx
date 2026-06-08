@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Trash2, RefreshCw, Loader2, ExternalLink } from 'lucide-react';
 import { Card, EbayListing, SignalType } from '@/types';
 import { formatCurrency, formatPct, calcRoi, roiColor } from '@/lib/utils';
+import { buildEbayQuery } from '@/lib/ebay-utils';
 import { useStore } from '@/lib/store';
 
 const SPORT_BG: Record<string, string> = {
@@ -52,9 +53,9 @@ export default function CardRow({ card, signal }: Props) {
 
   async function refreshPrice() {
     setRefreshing(true);
-    const query = `${card.year} ${card.brand} ${card.player} ${card.variation ?? ''}`.trim();
+    const query = buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition);
     try {
-      const res = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/ebay-pricing?q=${encodeURIComponent(query)}&player=${encodeURIComponent(card.player)}`);
       const data = await res.json();
       if (data.listings?.length > 0) {
         const prices: number[] = data.listings.map((l: EbayListing) => l.price);
