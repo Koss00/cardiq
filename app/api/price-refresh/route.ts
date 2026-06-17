@@ -4,6 +4,7 @@ import { sendPriceAlertEmail } from '@/lib/email';
 import { setCachedEbay, recordPriceHistory } from '@/lib/cache';
 import { getEbayAppToken } from '@/lib/ebay-auth';
 import { buildEbayQuery, fetchFindingSold } from '@/lib/ebay-utils';
+import { clerkClient } from '@clerk/nextjs/server';
 
 const BROWSE_API          = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 const ALERT_THRESHOLD_PCT = 10;
@@ -35,6 +36,25 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
 
   const appId = process.env.EBAY_APP_ID ?? '';
+
+  // Resolve a card owner's email from Clerk (email isn't stored in our DB), cached
+  // per user so repeated alerts in one run cost one lookup. Returns null on miss.
+  const emailCache = new Map<string, string | null>();
+  let clerk: Awaited<ReturnType<typeof clerkClient>> | null = null;
+  async function ownerEmailFor(userId: string | undefined): Promise<string | null> {
+    if (!userId || userId === 'legacy') return null;
+    if (emailCache.has(userId)) return emailCache.get(userId)!;
+    try {
+      if (!clerk) clerk = await clerkClient();
+      const user = await clerk.users.getUser(userId);
+      const email = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? null;
+      emailCache.set(userId, email);
+      return email;
+    } catch {
+      emailCache.set(userId, null);
+      return null;
+    }
+  }
 
   for (const card of cards) {
     const query = buildEbayQuery(card.year, card.brand, card.player, card.variation, card.condition);
@@ -112,9 +132,8 @@ export async function POST(req: NextRequest) {
                 newPrice:  currPrice,
                 pctChange: Math.round(pctChange * 100) / 100,
               });
-              // Send email alert (requires RESEND_API_KEY to be set)
-              const cardWithUser = card as unknown as Record<string, string>;
-              const ownerEmail = cardWithUser.ownerEmail;
+              // Send email alert (requires RESEND_API_KEY; email resolved from Clerk)
+              const ownerEmail = await ownerEmailFor(card.userId);
               if (ownerEmail) {
                 sendPriceAlertEmail({
                   to:         ownerEmail,
@@ -143,7 +162,7 @@ export async function POST(req: NextRequest) {
   // Group updated cards by user and sum their current values
   const userValues = new Map<string, number>();
   for (const card of cards) {
-    const uid = (card as unknown as Record<string, string>).userId ?? 'legacy';
+    const uid = card.userId ?? 'legacy';
     userValues.set(uid, (userValues.get(uid) ?? 0) + card.currentValue);
   }
   for (const [uid, total] of userValues) {
