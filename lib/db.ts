@@ -793,6 +793,7 @@ interface CardRow {
 function rowToCard(r: Record<string, unknown>) {
   return {
     id:               r.id as string,
+    userId:           r.user_id as string,
     player:           r.player as string,
     year:             r.year as number,
     brand:            r.brand as string,

@@ -1,0 +1,22 @@
+name: Nightly Signal Sweep
+
+on:
+  schedule:
+    - cron: '30 6 * * *'  # 2:30am EST — 30 min after price-refresh, so price history is fresh
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger signal sweep
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.CARDIQ_URL }}/api/signal-sweep" \
+            -H "Authorization: Bearer ${{ secrets.PRICE_REFRESH_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Signal sweep failed with status $STATUS"
+            exit 1
+          fi
