@@ -14,6 +14,7 @@ import { fetchPlayerNews } from '@/lib/player-news';
 import { buildEbayIntel, buildEbayQuery, formatEbayContext, fetchFindingSold, EbayIntel } from '@/lib/ebay-utils';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp, sanitizeCardField } from '@/lib/security';
+import { publishToMarket, readHawkPicks } from '@/lib/fleet-bridge';
 
 const client = new Anthropic();
 
@@ -241,15 +242,16 @@ export async function POST(req: NextRequest) {
   const ebayQuery  = buildEbayQuery(safeCard.year, safeCard.brand, safeCard.player, safeCard.variation, safeCard.condition);
   const appId      = process.env.EBAY_APP_ID;
 
-  // Parallel data fetch: stats, news, price history, prior signals, win rate, eBay sold data
-  // Fetching eBay sold data here (not from cache) guarantees signals always use real sold prices.
-  const [playerStats, newsItems, priceHistory, priorCtx, winRate, freshSoldListings] = await Promise.all([
+  // Parallel data fetch: stats, news, price history, prior signals, win rate, eBay sold data,
+  // and HAWK sports picks (local fleet only — no-ops on Vercel).
+  const [playerStats, newsItems, priceHistory, priorCtx, winRate, freshSoldListings, hawkPicks] = await Promise.all([
     fetchPlayerStats(safeCard.player, safeCard.sport).catch(() => null as PlayerStats | null),
     fetchPlayerNews(safeCard.player, safeCard.sport).catch(() => [] as string[]),
     dbGetPriceHistory(`history:${ebayQuery}`).catch(() => []),
     buildPriorContext(cardHash),
     dbGetSignalWinRate(30).catch(() => null as number | null),
     appId ? fetchFindingSold(ebayQuery, appId, safeCard.player).catch(() => null) : Promise.resolve(null),
+    Promise.resolve(readHawkPicks()),
   ]);
 
   if (playerStats) console.log(`[signals] ${playerStats.stats.length} stats for ${safeCard.player}`);
@@ -294,6 +296,10 @@ export async function POST(req: NextRequest) {
     async start(ctrl) {
       try {
         // ── Stage 1: Verdict ───────────────────────────────────────────────
+        const hawkContext = hawkPicks
+          ? `\nHAWK SPORTS PICKS (≥70% confidence today): ${hawkPicks}\nIf this player's team is listed above, that is a supporting buy catalyst — active play correlates with card demand.\n`
+          : '';
+
         const verdictRes = await client.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 350,
@@ -307,7 +313,7 @@ ${detail}
 ${statsContext}
 ${newsContext}
 ${ebayContext}
-
+${hawkContext}
 PRIOR SIGNALS:
 ${priorCtx.text}
 
@@ -492,6 +498,20 @@ Output EXACTLY these four sections with no extra text:
         }).catch((err) => console.warn('[signals] dbSaveSignal failed:', err instanceof Error ? err.message : String(err)));
 
         setCachedSignal(cardHash, signal);
+
+        // Push to MARKET agent inbox (local fleet only — no-ops on Vercel)
+        publishToMarket({
+          player: safeCard.player,
+          card: `${safeCard.year} ${safeCard.brand} ${safeCard.player}${safeCard.variation ? ` ${safeCard.variation}` : ''} ${safeCard.condition}`,
+          signal: verdict.signal,
+          confidence: verdict.confidence,
+          priceTarget: verdict.priceTarget,
+          summary: verdict.summary,
+          marketHeatScore: verdict.marketHeatScore,
+          wyckoffRegime: verdict.wyckoffRegime,
+          evPerDollar: verdict.evPerDollar,
+        });
+
         ctrl.enqueue(sse({ type: 'done', signal }));
       } catch (err) {
         console.error('signals stream error:', err instanceof Error ? err.message : String(err));
