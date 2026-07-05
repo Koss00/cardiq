@@ -1,205 +1,20 @@
 import Link from 'next/link';
 import {
-  ScanLine, Brain, BarChart3, ArrowRight, CheckCircle,
-  TrendingUp, Zap, ChevronRight, TrendingDown, Minus,
+  ArrowRight, ChevronRight, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
-import EmailForm from '@/components/landing/EmailForm';
-
-const FEATURES = [
-  {
-    icon: ScanLine,
-    tag: 'SCAN',
-    title: 'AI Card Scanner',
-    description:
-      'Photograph any card and Claude Vision instantly identifies the player, year, brand, set, and variation — no manual entry required.',
-    bullets: [
-      'Identifies in under 3 seconds',
-      'Works on raw and graded cards',
-      'Supports all major sports & brands',
-    ],
-    hoverBorder: 'hover:border-[rgba(0,212,170,0.35)]',
-    hoverGlow: 'rgba(0,212,170,0.06)',
-    accentGlow: 'rgba(0,212,170,0.12)',
-    iconBg: 'border-[rgba(0,212,170,0.3)] bg-[rgba(0,212,170,0.1)]',
-    iconColor: 'text-electric',
-    tagColor: 'text-electric',
-  },
-  {
-    icon: BarChart3,
-    tag: 'TRACK',
-    title: 'Live Portfolio Tracker',
-    description:
-      "Every card's cost basis, current market value, and ROI — updated with live eBay market data refreshed automatically.",
-    bullets: [
-      'Live eBay market pricing',
-      'ROI calculated per card',
-      'Sortable, filterable dashboard',
-    ],
-    hoverBorder: 'hover:border-[rgba(52,211,153,0.35)]',
-    hoverGlow: 'rgba(52,211,153,0.06)',
-    accentGlow: 'rgba(52,211,153,0.12)',
-    iconBg: 'border-emerald-500/25 bg-emerald-500/10',
-    iconColor: 'text-emerald-400',
-    tagColor: 'text-emerald-400',
-  },
-  {
-    icon: Brain,
-    tag: 'INTELLIGENCE',
-    title: 'Market Intelligence',
-    description:
-      'AI analyzes your portfolio and delivers buy, sell, or hold signals based on player performance, card scarcity, and market trends.',
-    bullets: [
-      'BUY / SELL / HOLD signals',
-      'Confidence score per card',
-      'Price targets included',
-    ],
-    hoverBorder: 'hover:border-[rgba(245,200,66,0.35)]',
-    hoverGlow: 'rgba(245,200,66,0.06)',
-    accentGlow: 'rgba(245,200,66,0.12)',
-    iconBg: 'border-[rgba(245,200,66,0.25)] bg-gold-400/10',
-    iconColor: 'text-gold-400',
-    tagColor: 'text-gold-400',
-  },
-];
-
-const EARLY_ACCESS_PERKS = [
-  'Full access to AI card scanning',
-  'Live eBay pricing & portfolio tracking',
-  'Market intelligence signals',
-  'Priority support & feature requests',
-];
-
-const HOW_IT_WORKS = [
-  {
-    step: '01',
-    title: 'Scan Your Card',
-    description: 'Upload a photo. AI identifies the card in seconds.',
-    icon: ScanLine,
-  },
-  {
-    step: '02',
-    title: 'Track Your Portfolio',
-    description: 'Live eBay pricing and ROI calculated automatically.',
-    icon: TrendingUp,
-  },
-  {
-    step: '03',
-    title: 'Act on Intelligence',
-    description: 'Get AI buy/sell/hold signals with price targets.',
-    icon: Zap,
-  },
-];
-
-/* ── Floating card mockup ─────────────────────────────────────────────────── */
-function FloatingCardMockup() {
-  return (
-    <div className="relative mx-auto mt-20 mb-6 w-full max-w-3xl px-4 pointer-events-none select-none">
-      {/* Ambient bloom behind cards */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(245,200,66,0.1) 0%, rgba(0,212,170,0.05) 40%, transparent 70%)',
-        filter: 'blur(20px)',
-      }} />
-
-      <div className="flex items-end justify-center gap-4 sm:gap-6">
-        {/* Card 1 — tilted left */}
-        <div
-          className="relative w-28 sm:w-36 rounded-xl overflow-hidden flex-shrink-0"
-          style={{
-            aspectRatio: '5/7',
-            transform: 'rotate(-8deg) translateY(12px)',
-            background: 'linear-gradient(155deg, #0D3320 0%, #1E6B3C 45%, #0F1A2E 100%)',
-            border: '1px solid rgba(52,211,153,0.25)',
-            boxShadow: '0 24px 48px rgba(4,11,22,0.7), 0 0 0 1px rgba(52,211,153,0.15)',
-          }}
-        >
-          <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'linear-gradient(90deg, transparent, rgba(52,211,153,0.6), transparent)' }} />
-          <div className="absolute bottom-0 left-0 right-0 p-2">
-            <div className="h-1 w-8 bg-emerald-400/30 rounded mb-1" />
-            <div className="h-3 w-14 bg-white/15 rounded mb-0.5" />
-            <div className="h-2 w-10 bg-white/8 rounded" />
-          </div>
-          <div className="absolute top-2 right-2">
-            <div className="text-[7px] font-black text-emerald-400/60 bg-emerald-500/20 px-1 py-0.5 rounded">RAW</div>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="font-card text-3xl text-white/10 uppercase">RC</div>
-          </div>
-        </div>
-
-        {/* Card 2 — center, upright, with signal glow */}
-        <div
-          className="relative w-36 sm:w-44 rounded-xl overflow-hidden flex-shrink-0"
-          style={{
-            aspectRatio: '5/7',
-            transform: 'translateY(0)',
-            background: 'linear-gradient(155deg, #0A1E3D 0%, #1E4080 45%, #0F1A2E 100%)',
-            border: '1px solid rgba(245,200,66,0.45)',
-            boxShadow: '0 32px 64px rgba(4,11,22,0.8), 0 0 0 1px rgba(245,200,66,0.3), 0 0 40px rgba(245,200,66,0.12)',
-          }}
-        >
-          <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'linear-gradient(90deg, transparent, rgba(245,200,66,0.9), transparent)' }} />
-          {/* BUY badge */}
-          <div className="absolute top-2 right-2 bg-emerald-500 text-[#060E1C] text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">BUY</div>
-          <div className="absolute top-2 left-2 text-[7px] font-black text-gold-400/60 uppercase tracking-wider">2023 · PSA</div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="font-card text-4xl text-white/10 uppercase">QB</div>
-          </div>
-          {/* ROI */}
-          <div className="absolute bottom-0 left-0 right-0 px-2 pb-3">
-            <div className="h-2 w-12 bg-gold-400/20 rounded mb-1.5" />
-            <div className="font-card text-lg text-white/20 leading-none">MAHOMES</div>
-            <div className="h-2 w-8 bg-emerald-400/30 rounded mt-1.5" />
-          </div>
-        </div>
-
-        {/* Card 3 — tilted right */}
-        <div
-          className="relative w-28 sm:w-36 rounded-xl overflow-hidden flex-shrink-0"
-          style={{
-            aspectRatio: '5/7',
-            transform: 'rotate(8deg) translateY(12px)',
-            background: 'linear-gradient(155deg, #3D1200 0%, #A84000 45%, #0F1A2E 100%)',
-            border: '1px solid rgba(244,162,97,0.25)',
-            boxShadow: '0 24px 48px rgba(4,11,22,0.7), 0 0 0 1px rgba(244,162,97,0.15)',
-          }}
-        >
-          <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'linear-gradient(90deg, transparent, rgba(244,162,97,0.6), transparent)' }} />
-          <div className="absolute top-2 right-2">
-            <div className="text-[7px] font-black text-amber-400/60 bg-amber-500/20 px-1 py-0.5 rounded">HOLD</div>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="font-card text-3xl text-white/10 uppercase">SF</div>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 p-2">
-            <div className="h-1 w-8 bg-orange-400/20 rounded mb-1" />
-            <div className="h-3 w-14 bg-white/15 rounded mb-0.5" />
-            <div className="h-2 w-10 bg-white/8 rounded" />
-          </div>
-        </div>
-      </div>
-
-      {/* Stats strip below cards */}
-      <div className="flex flex-col items-center gap-3 mt-8">
-        <p className="text-[9px] text-chrome-700 uppercase tracking-widest font-display">Example portfolio</p>
-        <div className="flex items-center justify-center gap-6">
-        {[
-          { label: 'Portfolio Value', value: '$4,280', color: 'text-gold-400' },
-          { label: 'Total ROI', value: '+34.2%', color: 'text-electric' },
-          { label: 'Active Signals', value: '3 BUY', color: 'text-emerald-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="text-center">
-            <p className={`font-display font-black text-lg ${color} leading-none`}>{value}</p>
-            <p className="text-[10px] text-chrome-600 uppercase tracking-widest font-display mt-0.5">{label}</p>
-          </div>
-        ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+import ImmersiveHero from '@/components/landing/ImmersiveHero';
+import CinematicScroll from '@/components/landing/CinematicScroll';
+import VideoBackdrop from '@/components/landing/VideoBackdrop';
+import ScrubHero from '@/components/landing/ScrubHero';
+import PinnedFeatures from '@/components/landing/PinnedFeatures';
+import MetricsCounters from '@/components/landing/MetricsCounters';
+import ProductShot from '@/components/landing/ProductShot';
+import PricingTiers from '@/components/landing/PricingTiers';
+import FAQAccordion from '@/components/landing/FAQAccordion';
 
 export default function LandingPage() {
   return (
+    <CinematicScroll>
     <div className="min-h-screen bg-[#060E1C] text-slate-100 overflow-x-hidden">
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
@@ -225,87 +40,12 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="relative pt-40 pb-8 px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center overflow-hidden">
-        {/* Background layers — layered glows for depth */}
-        <div className="absolute inset-0 dot-grid opacity-40 pointer-events-none" />
+      {/* ── Act 0 — scroll-scrubbed particle assembly (activates when
+             /video/hero-assembly.mp4 exists) ─────────────────────────────── */}
+      <ScrubHero />
 
-        {/* Deep gold radial at top center */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245,200,66,0.13) 0%, rgba(212,160,23,0.06) 35%, transparent 70%)',
-          filter: 'blur(2px)',
-        }} />
-
-        {/* Teal accent — bottom left */}
-        <div className="absolute top-64 -left-32 w-96 h-96 pointer-events-none" style={{
-          background: 'radial-gradient(circle, rgba(0,212,170,0.1) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }} />
-
-        {/* Purple depth — bottom right */}
-        <div className="absolute top-48 -right-24 w-72 h-72 pointer-events-none" style={{
-          background: 'radial-gradient(circle, rgba(123,47,255,0.08) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }} />
-
-        {/* Second gold bloom — centered */}
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[500px] h-[300px] pointer-events-none" style={{
-          background: 'radial-gradient(ellipse at 50% 50%, rgba(245,200,66,0.07) 0%, transparent 65%)',
-          filter: 'blur(30px)',
-        }} />
-
-        {/* Live badge */}
-        <div className="relative inline-flex items-center gap-2 border border-[rgba(245,200,66,0.3)] bg-[rgba(245,200,66,0.08)] text-gold-400 text-[11px] font-black px-4 py-2 rounded-full mb-10 uppercase tracking-widest fade-in-up">
-          <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-glow-pulse" />
-          Now in Early Access
-        </div>
-
-        {/* Headline */}
-        <h1 className="relative font-card text-6xl sm:text-7xl lg:text-8xl xl:text-[6.5rem] text-white mb-7 max-w-5xl leading-none uppercase tracking-widest fade-in-up fade-in-up-delay-1">
-          Your Cards.{' '}
-          <span style={{
-            background: 'linear-gradient(90deg, #D4A017 0%, #F5C842 30%, #FAE07A 50%, #F5C842 70%, #D4A017 100%)',
-            backgroundSize: '200% auto',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            animation: 'chrome-sweep 3s linear infinite',
-          }}>Smarter.</span>
-        </h1>
-
-        {/* Subheadline */}
-        <p className="relative text-lg sm:text-xl text-slate-400 max-w-2xl mb-10 leading-relaxed font-sans fade-in-up fade-in-up-delay-2">
-          The AI-powered sports card portfolio platform. Identify any card from a photo,
-          track real-time values, and get market intelligence to buy and sell at the right time.
-        </p>
-
-        {/* Email waitlist */}
-        <div className="relative w-full max-w-md mb-5 fade-in-up fade-in-up-delay-3">
-          <EmailForm />
-        </div>
-
-        {/* Secondary CTA */}
-        <Link
-          href="/dashboard"
-          className="relative inline-flex items-center gap-2 text-slate-500 hover:text-slate-200 text-sm font-semibold transition-colors duration-200 group mb-4"
-        >
-          Or launch the app now
-          <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform duration-200" />
-        </Link>
-
-        {/* Trust row */}
-        <div className="relative flex flex-wrap items-center justify-center gap-6 text-[11px] text-slate-600 uppercase tracking-widest mb-2">
-          {['Free to use', 'No credit card required', 'Powered by Claude AI'].map((item) => (
-            <span key={item} className="flex items-center gap-1.5">
-              <CheckCircle size={11} className="text-gold-400" />
-              {item}
-            </span>
-          ))}
-        </div>
-
-        {/* Floating card mockup */}
-        <FloatingCardMockup />
-      </section>
+      {/* ── Act 1 — interactive hero: the assembled card, now touchable ──── */}
+      <ImmersiveHero />
 
       {/* ── Signal ticker strip ──────────────────────────────────────────── */}
       <div className="border-y border-[#1E2D45] bg-[#060E1C] py-4 overflow-hidden">
@@ -336,124 +76,31 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── Early Access band ────────────────────────────────────────────── */}
-      <section className="border-b border-[#1E2D45] bg-[rgba(245,200,66,0.03)] py-16 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <p className="text-gold-400 text-[11px] font-black uppercase tracking-widest mb-4">
-            Limited Availability
-          </p>
-          <h3 className="font-card text-3xl sm:text-4xl mb-3 tracking-widest uppercase">
-            <span className="title-gold">Get updates as we build</span>
-          </h3>
-          <p className="text-slate-400 text-sm mb-10 font-sans leading-relaxed max-w-lg mx-auto">
-            Drop your email to get notified about new features, improvements, and when we launch premium tiers.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-w-xl mx-auto text-left">
-            {EARLY_ACCESS_PERKS.map((perk) => (
-              <div key={perk} className="flex items-center gap-3 text-sm text-slate-300 font-sans">
-                <CheckCircle size={13} className="text-gold-400 flex-shrink-0" />
-                {perk}
-              </div>
-            ))}
-          </div>
-          <p className="text-chrome-700 text-xs mt-10 uppercase tracking-widest">
-            No credit card required &middot; Cancel anytime
-          </p>
-        </div>
-      </section>
+      {/* ── Act 2 — SCAN · TRACK · SIGNAL pinned over the signal footage ─── */}
+      <PinnedFeatures />
 
-      {/* ── Features ────────────────────────────────────────────────────── */}
-      <section id="features" className="py-28 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <p className="text-gold-400 text-[11px] font-black uppercase tracking-widest mb-4">Features</p>
-            <h2 className="font-card text-5xl sm:text-6xl uppercase mb-5 tracking-widest">
-              <span className="title-chrome">Everything your collection needs</span>
-            </h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto font-sans leading-relaxed">
-              CardIQ combines AI vision, live market data, and intelligent signals into one platform built for serious collectors.
-            </p>
-          </div>
+      {/* ── Honest numbers ───────────────────────────────────────────────── */}
+      <MetricsCounters />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {FEATURES.map(({ icon: Icon, tag, title, description, bullets, iconBg, iconColor, tagColor, hoverBorder, hoverGlow, accentGlow }) => (
-              <div
-                key={title}
-                className={`chrome-panel p-8 group relative overflow-hidden transition-all duration-300 cursor-default ${hoverBorder}`}
-                style={{ transition: 'border-color 0.2s ease, box-shadow 0.2s ease' }}
-              >
-                {/* Hover glow overlay */}
-                <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300"
-                  style={{ background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${accentGlow} 0%, transparent 70%)` }}
-                />
+      {/* ── The product, framed ──────────────────────────────────────────── */}
+      <ProductShot />
 
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-5 relative ${tagColor}`}>{tag}</p>
-                <div className={`w-11 h-11 border flex items-center justify-center mb-6 rounded-md relative ${iconBg}`}>
-                  <Icon size={19} className={iconColor} />
-                </div>
-                <h3 className="font-display font-bold text-white text-xl uppercase tracking-wide mb-3 relative">{title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6 font-sans relative">{description}</p>
-                <ul className="space-y-2.5 relative">
-                  {bullets.map((b) => (
-                    <li key={b} className="flex items-center gap-2.5 text-sm text-slate-400 font-sans">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${iconColor.replace('text-', 'bg-')}`} />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── Pricing ──────────────────────────────────────────────────────── */}
+      <PricingTiers />
 
-      {/* ── How it Works ────────────────────────────────────────────────── */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-[rgba(13,26,48,0.4)] border-y border-[#1E2D45]">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-gold-400 text-[11px] font-black uppercase tracking-widest mb-4">How it works</p>
-            <h2 className="font-card text-4xl sm:text-5xl uppercase tracking-widest">
-              <span className="title-gold">From photo to portfolio in seconds</span>
-            </h2>
-          </div>
+      {/* ── FAQ ──────────────────────────────────────────────────────────── */}
+      <FAQAccordion />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {HOW_IT_WORKS.map(({ step, title, description, icon: Icon }, i) => (
-              <div key={step} className="relative text-center">
-                {i < HOW_IT_WORKS.length - 1 && (
-                  <div
-                    className="hidden md:block absolute top-6 h-px pointer-events-none"
-                    style={{
-                      left: 'calc(50% + 44px)',
-                      right: 'calc(-50% + 44px)',
-                      background: 'linear-gradient(90deg, rgba(245,200,66,0.3) 0%, transparent 100%)',
-                    }}
-                  />
-                )}
-                <div className="w-14 h-14 border border-[rgba(245,200,66,0.3)] bg-[rgba(245,200,66,0.08)] flex items-center justify-center mx-auto mb-5 rounded-xl" style={{
-                  boxShadow: '0 0 0 4px rgba(245,200,66,0.05), 0 8px 24px rgba(4,11,22,0.5)',
-                }}>
-                  <Icon size={22} className="text-gold-400" />
-                </div>
-                <p className="text-[10px] font-black text-gold-500 mb-1.5 tracking-widest uppercase font-display">{step}</p>
-                <h3 className="font-display font-bold text-white uppercase tracking-wide mb-2.5 text-lg">{title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed font-sans">{description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA ─────────────────────────────────────────────────────────── */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto">
+      {/* ── Act 3 — the calm: final CTA over the collector-desk footage ──── */}
+      <section className="relative py-32 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <VideoBackdrop src="/video/collector-desk.mp4" fallbackSrc="/video/vault-gold.mp4" opacity={0.4} />
+        <div data-reveal className="relative z-10 max-w-3xl mx-auto">
           <div className="relative overflow-hidden rounded-2xl" style={{
-            background: 'linear-gradient(145deg, #131E34 0%, #0D1727 50%, #131E34 100%)',
+            background: 'linear-gradient(145deg, rgba(19,30,52,0.92) 0%, rgba(13,23,39,0.92) 50%, rgba(19,30,52,0.92) 100%)',
             border: '1px solid rgba(245,200,66,0.2)',
             boxShadow: '0 0 0 1px rgba(245,200,66,0.08), 0 24px 80px rgba(4,11,22,0.7), 0 0 60px rgba(245,200,66,0.06)',
+            backdropFilter: 'blur(12px)',
           }}>
-            {/* Dramatic gold radial glow inside */}
             <div className="absolute inset-0 pointer-events-none" style={{
               background: 'radial-gradient(ellipse 80% 70% at 50% -10%, rgba(245,200,66,0.14) 0%, transparent 65%)',
             }} />
@@ -479,12 +126,12 @@ export default function LandingPage() {
                   Launch App Free
                   <ArrowRight size={16} />
                 </Link>
-                <a
-                  href="#features"
+                <Link
+                  href="/pricing"
                   className="btn-ghost inline-flex items-center justify-center gap-2 px-9 py-4 font-bold text-sm uppercase tracking-widest"
                 >
-                  See Features
-                </a>
+                  See Pricing
+                </Link>
               </div>
             </div>
           </div>
@@ -518,5 +165,6 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+    </CinematicScroll>
   );
 }

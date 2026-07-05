@@ -34,6 +34,8 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
   async headers() {
+    // Frame-blocking + CSP break local preview tooling; only enforce in prod.
+    if (process.env.NODE_ENV !== 'production') return [];
     return [
       {
         source: '/(.*)',
