@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { goldSound } from './soundEngine';
 
 const AssemblyScene = dynamic(() => import('./AssemblyScene'), { ssr: false });
 
@@ -56,6 +57,7 @@ export default function ScrubHero() {
       onUpdate: (self) => {
         const p = self.progress;
         stage.dataset.progress = p.toFixed(3); // exposed for tests/tools
+        goldSound.setProgress(p); // shimmer follows the assembly
 
         // Assembly consumes the first 85% of the pin
         progressRef.current = gsap.utils.clamp(0, 1, p / 0.85);

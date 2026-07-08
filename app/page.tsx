@@ -3,6 +3,7 @@ import {
   ArrowRight, ChevronRight, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
 import ImmersiveHero from '@/components/landing/ImmersiveHero';
+import SoundToggle from '@/components/landing/SoundToggle';
 import CinematicScroll from '@/components/landing/CinematicScroll';
 import VideoBackdrop from '@/components/landing/VideoBackdrop';
 import ScrubHero from '@/components/landing/ScrubHero';
@@ -31,12 +32,15 @@ export default function LandingPage() {
             </div>
             <span className="font-card text-xl tracking-widest chrome-text select-none">CARD<span>IQ</span></span>
           </div>
-          <Link
-            href="/dashboard"
-            className="btn-gold flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest"
-          >
-            Launch App <ChevronRight size={12} />
-          </Link>
+          <div className="flex items-center gap-3">
+            <SoundToggle />
+            <Link
+              href="/dashboard"
+              className="btn-gold flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest"
+            >
+              Launch App <ChevronRight size={12} />
+            </Link>
+          </div>
         </div>
       </header>
 
