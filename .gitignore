@@ -21,3 +21,6 @@ Thumbs.db
 
 .vercel
 .env*.local
+
+# scroll-world build pipeline — 623MB incl. node_modules; archived to Drive, not versioned
+world-build/
